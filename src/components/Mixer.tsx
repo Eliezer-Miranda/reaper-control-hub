@@ -18,14 +18,14 @@ export function Mixer() {
   }
 
   return (
-    <div className="panel p-3 overflow-x-auto">
-      <div className="flex items-stretch gap-2 min-w-fit">
+    <div className="panel overflow-x-auto bg-background p-0">
+      <div className="flex items-stretch min-w-fit">
         {channels.map((t) => (
           <TrackStrip key={t.index} track={t} />
         ))}
         {master && (
           <>
-            <div className="w-px bg-border mx-2" />
+            <div className="w-2 bg-background" />
             <TrackStrip track={master} />
           </>
         )}

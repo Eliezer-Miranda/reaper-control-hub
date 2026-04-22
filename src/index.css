@@ -1,83 +1,87 @@
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Rajdhani:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* REAPER Remote Control — Design System
-   All colors HSL. Dark, console-inspired, amber accent. */
+/* REAPER Remote — Native look. Neutral grays, console UI. */
 
 @layer base {
   :root {
-    --background: 240 6% 10%;
-    --foreground: 40 15% 92%;
+    /* Neutral grays — match native REAPER chrome */
+    --background: 0 0% 16%;
+    --foreground: 0 0% 86%;
 
-    --surface: 240 6% 13%;
-    --surface-2: 240 5% 16%;
-    --surface-3: 240 5% 20%;
+    --surface: 0 0% 18%;
+    --surface-2: 0 0% 22%;
+    --surface-3: 0 0% 27%;
 
-    --card: 240 6% 13%;
-    --card-foreground: 40 15% 92%;
+    --card: 0 0% 18%;
+    --card-foreground: 0 0% 86%;
 
-    --popover: 240 6% 14%;
-    --popover-foreground: 40 15% 92%;
+    --popover: 0 0% 18%;
+    --popover-foreground: 0 0% 86%;
 
-    --primary: 33 80% 52%;
-    --primary-foreground: 240 10% 8%;
-    --primary-glow: 33 90% 60%;
+    /* Subtle green-ish accent (like REAPER's play button), used sparingly */
+    --primary: 140 55% 45%;
+    --primary-foreground: 0 0% 8%;
+    --primary-glow: 140 60% 55%;
 
-    --secondary: 240 5% 18%;
-    --secondary-foreground: 40 15% 92%;
+    --secondary: 0 0% 22%;
+    --secondary-foreground: 0 0% 86%;
 
-    --muted: 240 5% 16%;
-    --muted-foreground: 240 5% 60%;
+    --muted: 0 0% 22%;
+    --muted-foreground: 0 0% 55%;
 
-    --accent: 33 80% 52%;
-    --accent-foreground: 240 10% 8%;
+    --accent: 140 55% 45%;
+    --accent-foreground: 0 0% 8%;
 
-    --destructive: 0 72% 50%;
+    --destructive: 0 70% 50%;
     --destructive-foreground: 0 0% 100%;
 
-    --success: 142 70% 45%;
+    --success: 140 55% 45%;
     --warning: 45 95% 55%;
     --info: 200 90% 55%;
 
-    --record: 0 80% 55%;
+    --record: 0 75% 52%;
     --solo: 210 90% 55%;
     --mute: 45 95% 55%;
 
-    --border: 240 5% 22%;
-    --input: 240 5% 18%;
-    --ring: 33 80% 52%;
+    --border: 0 0% 10%;
+    --border-light: 0 0% 32%;
+    --input: 0 0% 13%;
+    --ring: 140 55% 45%;
 
-    --radius: 0.375rem;
+    --radius: 0.25rem;
 
+    /* VU meter: classic green→yellow→red, mostly green */
     --gradient-vu: linear-gradient(to top,
-      hsl(142 70% 45%) 0%,
-      hsl(142 70% 45%) 60%,
-      hsl(45 95% 55%) 75%,
-      hsl(25 90% 55%) 88%,
-      hsl(0 85% 55%) 100%);
-    --gradient-fader: linear-gradient(to bottom, hsl(240 5% 22%), hsl(240 5% 14%));
-    --gradient-amber: linear-gradient(135deg, hsl(33 80% 52%), hsl(20 85% 50%));
-    --shadow-inset: inset 0 1px 2px hsl(0 0% 0% / 0.4);
-    --shadow-glow-amber: 0 0 20px hsl(33 80% 52% / 0.4);
-    --shadow-panel: 0 1px 0 hsl(0 0% 100% / 0.04), 0 4px 12px hsl(0 0% 0% / 0.3);
+      hsl(140 65% 35%) 0%,
+      hsl(140 70% 45%) 55%,
+      hsl(70 80% 50%) 75%,
+      hsl(35 90% 55%) 88%,
+      hsl(0 80% 55%) 100%);
 
-    --sidebar-background: 240 6% 11%;
-    --sidebar-foreground: 40 15% 88%;
-    --sidebar-primary: 33 80% 52%;
-    --sidebar-primary-foreground: 240 10% 8%;
-    --sidebar-accent: 240 5% 16%;
-    --sidebar-accent-foreground: 40 15% 92%;
-    --sidebar-border: 240 5% 20%;
-    --sidebar-ring: 33 80% 52%;
+    /* Fader cap looks like white with diagonal stripes */
+    --fader-cap: linear-gradient(180deg, hsl(0 0% 88%), hsl(0 0% 70%) 50%, hsl(0 0% 78%));
+
+    --shadow-inset: inset 0 1px 2px hsl(0 0% 0% / 0.6);
+    --shadow-bevel-up: inset 0 1px 0 hsl(0 0% 100% / 0.08), inset 0 -1px 0 hsl(0 0% 0% / 0.4);
+    --shadow-panel: 0 1px 0 hsl(0 0% 100% / 0.04);
+
+    --sidebar-background: 0 0% 16%;
+    --sidebar-foreground: 0 0% 82%;
+    --sidebar-primary: 140 55% 45%;
+    --sidebar-primary-foreground: 0 0% 8%;
+    --sidebar-accent: 0 0% 22%;
+    --sidebar-accent-foreground: 0 0% 86%;
+    --sidebar-border: 0 0% 10%;
+    --sidebar-ring: 140 55% 45%;
   }
 
   .dark {
-    /* same as root — app is dark by default */
-    --background: 240 6% 10%;
-    --foreground: 40 15% 92%;
+    --background: 0 0% 16%;
+    --foreground: 0 0% 86%;
   }
 }
 
@@ -90,7 +94,7 @@
   }
   body {
     @apply bg-background text-foreground font-sans antialiased;
-    font-feature-settings: "ss01", "cv11";
+    font-size: 12px;
   }
 }
 
@@ -98,18 +102,46 @@
   .font-mono-display {
     font-family: 'JetBrains Mono', ui-monospace, monospace;
     font-variant-numeric: tabular-nums;
-    letter-spacing: -0.02em;
+    letter-spacing: -0.01em;
   }
+  /* Generic flat panel with hard 1px dark border */
   .panel {
-    @apply bg-surface border border-border rounded-md;
+    @apply bg-surface border border-border rounded-sm;
     box-shadow: var(--shadow-panel);
   }
+  /* Recessed inset look (input wells, meter wells) */
+  .well {
+    background: hsl(0 0% 9%);
+    box-shadow: var(--shadow-inset);
+    border: 1px solid hsl(0 0% 6%);
+  }
+  /* Raised bevel button look */
+  .bevel {
+    background: linear-gradient(180deg, hsl(0 0% 32%), hsl(0 0% 22%));
+    box-shadow: var(--shadow-bevel-up);
+    border: 1px solid hsl(0 0% 8%);
+  }
+  .bevel:hover { background: linear-gradient(180deg, hsl(0 0% 36%), hsl(0 0% 26%)); }
+  .bevel:active { background: linear-gradient(180deg, hsl(0 0% 22%), hsl(0 0% 28%)); }
+
   .led {
     @apply inline-block w-2 h-2 rounded-full;
     box-shadow: 0 0 6px currentColor;
   }
-  .vu-bar {
-    background: var(--gradient-vu);
+  .vu-bar { background: var(--gradient-vu); }
+
+  /* Faux fader cap */
+  .fader-cap {
+    background: var(--fader-cap);
+    background-image:
+      repeating-linear-gradient(
+        45deg,
+        hsl(190 50% 45% / 0.6) 0 3px,
+        transparent 3px 6px
+      ),
+      var(--fader-cap);
+    border: 1px solid hsl(0 0% 8%);
+    box-shadow: 0 1px 2px hsl(0 0% 0% / 0.6), inset 0 1px 0 hsl(0 0% 100% / 0.5);
   }
 }
 
@@ -121,8 +153,8 @@
   }
   .animate-pulse-led { animation: pulse-led 1s ease-in-out infinite; }
   @keyframes record-blink {
-    0%, 100% { opacity: 1; box-shadow: 0 0 12px hsl(var(--record)); }
-    50% { opacity: 0.5; box-shadow: 0 0 4px hsl(var(--record)); }
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.55; }
   }
   .animate-record { animation: record-blink 1.2s ease-in-out infinite; }
 }

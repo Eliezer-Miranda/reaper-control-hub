@@ -11,39 +11,34 @@ const Index = () => {
   return (
     <ReaperProvider>
       <div className="min-h-screen flex flex-col bg-background text-foreground">
-        {/* Top bar */}
-        <header className="border-b border-border bg-surface px-4 py-2.5 flex items-center gap-3">
-          <div className="flex items-center gap-2">
-            <div className="h-7 w-7 rounded-md bg-gradient-amber grid place-items-center font-bold text-primary-foreground">
+        {/* Top bar — slim toolbar like REAPER */}
+        <header className="bg-surface-2 border-b border-border px-2 py-1 flex items-center gap-2 h-8">
+          <div className="flex items-center gap-1.5">
+            <div className="h-5 w-5 rounded-sm bg-surface-3 border border-border grid place-items-center text-[10px] font-bold text-foreground">
               R
             </div>
-            <div>
-              <h1 className="text-sm font-bold uppercase tracking-[0.2em] leading-none">REAPER</h1>
-              <p className="text-[10px] text-muted-foreground uppercase tracking-widest">Remote Control</p>
-            </div>
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-foreground/90">REAPER Remote</span>
           </div>
           <div className="ml-auto">
             <ConnectionPanel />
           </div>
         </header>
 
-        {/* Transport */}
-        <div className="px-3 pt-3">
-          <Transport />
-        </div>
+        {/* Transport bar */}
+        <Transport />
 
         {/* Main grid */}
-        <div className="flex-1 grid grid-cols-1 lg:grid-cols-[240px_1fr_280px] gap-3 p-3 min-h-0">
+        <div className="flex-1 grid grid-cols-1 lg:grid-cols-[200px_1fr_260px] gap-1 p-1 min-h-0">
           <aside className="hidden lg:block min-h-0">
             <TrackList />
           </aside>
 
-          <main className="min-h-0 flex flex-col gap-3">
+          <main className="min-h-0 flex flex-col gap-1">
             <Mixer />
             <LogConsole />
           </main>
 
-          <aside className="min-h-0 flex flex-col gap-3">
+          <aside className="min-h-0 flex flex-col gap-1">
             <ActionPanel />
             <div className="lg:hidden">
               <TrackList />
