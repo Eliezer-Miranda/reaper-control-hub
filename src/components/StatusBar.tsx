@@ -31,8 +31,10 @@ export function StatusBar() {
     "text-muted-foreground";
 
   return (
-    <div className="border-t border-border bg-surface px-4 py-1.5 flex items-center gap-4 text-[11px] font-mono">
-      <span className={cn("font-bold uppercase tracking-widest", stateColor)}>● {playState}</span>
+    <div className="border-t border-border bg-surface-2 px-2 py-1 flex items-center gap-3 text-[10px] font-mono">
+      <span className="text-muted-foreground">CPU: 1.8% · RAM: 80MB</span>
+      <span className="text-muted-foreground">·</span>
+      <span className={cn("font-bold uppercase", stateColor)}>● {playState}</span>
       <span className="text-muted-foreground">POS {(transport?.position ?? 0).toFixed(2)}s</span>
       <span className={cn("text-muted-foreground", loop && "text-primary")}>LOOP {loop ? "ON" : "OFF"}</span>
       <div className="flex-1" />
