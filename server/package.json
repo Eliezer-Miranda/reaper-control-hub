@@ -1,0 +1,16 @@
+{
+  "name": "reaper-remote-proxy",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "description": "Local Express proxy for REAPER Web Interface (CORS bypass)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7"
+  }
+}
