@@ -1,29 +1,20 @@
 import { Track } from "@/lib/reaperApi";
 import { useReaper } from "@/hooks/useReaper";
 import { ampToSlider, formatDb, sliderToAmp } from "@/lib/reaperApi";
-import { Slider } from "@/components/ui/slider";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { ChevronDown, Circle, Volume2 } from "lucide-react";
 
 interface Props {
   track: Track;
 }
 
-const TRACK_COLORS = [
-  "33 80% 52%", "200 80% 55%", "280 60% 60%", "340 75% 60%",
-  "150 60% 50%", "20 80% 55%", "190 70% 50%", "260 70% 60%",
-];
-
 export function TrackStrip({ track }: Props) {
   const { api, config, selectedTrack, setSelectedTrack, transport } = useReaper();
   const [localVol, setLocalVol] = useState(() => ampToSlider(track.volume));
   const [localPan, setLocalPan] = useState(track.pan);
-  const [editing, setEditing] = useState(false);
   const isPlaying = transport?.playstate === 1;
   const selected = selectedTrack === track.index;
-
-  const colorHsl = track.isMaster ? "33 80% 52%" : TRACK_COLORS[(track.index - 1) % TRACK_COLORS.length];
 
   useEffect(() => { setLocalVol(ampToSlider(track.volume)); }, [track.volume]);
   useEffect(() => { setLocalPan(track.pan); }, [track.pan]);
@@ -31,79 +22,94 @@ export function TrackStrip({ track }: Props) {
   const commitVol = (v: number) => api.setVolume(config, track.index, v).catch(() => undefined);
   const commitPan = (v: number) => api.setPan(config, track.index, v).catch(() => undefined);
 
+  const label = track.isMaster ? "MASTER" : (track.name || `Entrada ${track.index}`);
+
   return (
     <div
       onClick={() => setSelectedTrack(track.index)}
       className={cn(
-        "flex flex-col items-center gap-3 p-3 rounded-md border transition-all w-[110px] shrink-0 cursor-pointer",
-        "bg-surface border-border hover:border-surface-3",
-        selected && "border-primary shadow-amber",
-        track.isMaster && "bg-surface-2 border-primary/40",
+        "flex flex-col items-stretch w-[78px] shrink-0 select-none",
+        "bg-surface border-l border-r border-border cursor-pointer",
+        selected && "bg-surface-2",
       )}
     >
-      {/* Color strip + name */}
-      <div
-        className="w-full h-1 rounded-full"
-        style={{ background: `hsl(${colorHsl})` }}
-      />
-      {editing ? (
-        <input
-          autoFocus
-          defaultValue={track.name}
-          onBlur={() => setEditing(false)}
-          onKeyDown={(e) => { if (e.key === "Enter") setEditing(false); }}
-          className="w-full bg-input text-center text-xs px-1 py-0.5 rounded border border-border outline-none focus:border-primary"
-        />
-      ) : (
-        <button
-          onDoubleClick={() => setEditing(true)}
-          className="w-full text-center text-xs font-medium truncate uppercase tracking-wider"
-          title={track.name}
-        >
-          {track.name}
-        </button>
-      )}
-
-      {/* Pan */}
-      <PanKnob value={localPan} onChange={(v) => { setLocalPan(v); commitPan(v); }} />
-
-      {/* Buttons */}
-      {!track.isMaster && (
-        <div className="flex gap-1 w-full">
-          <MiniBtn active={track.mute} activeClass="bg-mute text-black border-mute"
-            onClick={(e) => { e.stopPropagation(); api.setMute(config, track.index, !track.mute); }}>
-            M
-          </MiniBtn>
-          <MiniBtn active={track.solo} activeClass="bg-solo text-white border-solo"
-            onClick={(e) => { e.stopPropagation(); api.setSolo(config, track.index, !track.solo); }}>
-            S
-          </MiniBtn>
-          <MiniBtn active={track.recarm} activeClass="bg-record text-white border-record"
-            onClick={(e) => { e.stopPropagation(); api.setRecArm(config, track.index, !track.recarm); }}>
-            R
-          </MiniBtn>
-        </div>
-      )}
-
-      {/* VU + Fader */}
-      <div className="flex gap-2 items-stretch h-44">
-        <VuMeter active={isPlaying && !track.mute} />
-        <div className="flex flex-col items-center justify-between">
-          <Slider
-            orientation="vertical"
-            min={0}
-            max={1}
-            step={0.001}
-            value={[localVol]}
-            onValueChange={(v) => setLocalVol(v[0])}
-            onValueCommit={(v) => commitVol(v[0])}
-            className="h-full"
-          />
-        </div>
+      {/* Header: track name dropdown */}
+      <div className="flex items-center gap-1 px-1 py-0.5 bg-surface-3 border-b border-border h-5">
+        <span className="text-[10px] truncate flex-1 text-foreground/90">{label}</span>
+        <ChevronDown className="h-2.5 w-2.5 text-muted-foreground shrink-0" />
       </div>
 
-      <div className="font-mono text-[10px] text-muted-foreground tabular-nums">
+      {/* Input row: in / IN / FX */}
+      <div className="flex items-center gap-0.5 px-1 py-0.5 border-b border-border h-5">
+        <span className="text-[9px] text-muted-foreground flex-1">in</span>
+        <ChevronDown className="h-2 w-2 text-muted-foreground" />
+        <div className="px-1 text-[8px] bg-surface-3 border border-border rounded-sm leading-tight">IN</div>
+        <div className="px-1 text-[8px] bg-surface-3 border border-border rounded-sm leading-tight ml-0.5">FX</div>
+      </div>
+
+      {/* Pan knob centered */}
+      <div className="flex justify-center py-1.5 border-b border-border">
+        <PanKnob value={localPan} onChange={(v) => { setLocalPan(v); commitPan(v); }} />
+      </div>
+
+      {/* dB readout */}
+      <div className="text-center text-[9px] text-muted-foreground font-mono py-0.5 border-b border-border">
         {formatDb(sliderToAmp(localVol))}
+      </div>
+
+      {/* Mute / Solo */}
+      <div className="flex gap-0.5 px-1 py-1 border-b border-border">
+        <MiniBtn
+          active={track.mute}
+          activeClass="bg-mute text-black"
+          onClick={(e) => { e.stopPropagation(); api.setMute(config, track.index, !track.mute); }}
+        >M</MiniBtn>
+        <MiniBtn
+          active={track.solo}
+          activeClass="bg-solo text-white"
+          onClick={(e) => { e.stopPropagation(); api.setSolo(config, track.index, !track.solo); }}
+        >S</MiniBtn>
+      </div>
+
+      {/* Fader area: dual VU + fader on right */}
+      <div className="flex gap-1 px-1 py-2 h-[200px] justify-center">
+        {/* Two VU columns (L/R) like REAPER */}
+        <div className="flex gap-px w-3">
+          <VuMeter active={isPlaying && !track.mute} level={localVol} />
+          <VuMeter active={isPlaying && !track.mute} level={localVol} offset={0.05} />
+        </div>
+        {/* Fader track + cap */}
+        <FaderTrack
+          value={localVol}
+          onChange={(v) => setLocalVol(v)}
+          onCommit={(v) => commitVol(v)}
+        />
+      </div>
+
+      {/* FX / Route placeholder buttons (inactive but for look) */}
+      <div className="flex gap-0.5 px-1 py-0.5 border-t border-border">
+        <div className="flex-1 text-center text-[9px] bg-surface-2 border border-border rounded-sm py-0.5">FX</div>
+      </div>
+
+      {/* Record arm circle */}
+      <div className="flex justify-center py-1.5 border-t border-border">
+        <button
+          onClick={(e) => { e.stopPropagation(); api.setRecArm(config, track.index, !track.recarm); }}
+          title="Record arm"
+          className={cn(
+            "h-5 w-5 rounded-full border-2 flex items-center justify-center transition-colors",
+            track.recarm
+              ? "border-record bg-record/30 animate-record"
+              : "border-border-light bg-surface-3 hover:bg-surface-2",
+          )}
+        >
+          <Circle className={cn("h-2 w-2", track.recarm ? "fill-record text-record" : "fill-muted-foreground/40 text-muted-foreground/40")} />
+        </button>
+      </div>
+
+      {/* Track index footer */}
+      <div className="text-center text-[10px] text-muted-foreground py-0.5 bg-background border-t border-border font-mono">
+        {track.isMaster ? "M" : track.index}
       </div>
     </div>
   );
@@ -121,7 +127,7 @@ function MiniBtn({
     <button
       onClick={onClick}
       className={cn(
-        "flex-1 h-7 text-xs font-bold rounded border border-border bg-surface-2 hover:bg-surface-3 transition-colors",
+        "flex-1 h-4 text-[10px] font-bold leading-none rounded-sm border border-border bg-surface-3 hover:bg-surface-2 transition-colors",
         active && activeClass,
       )}
     >
@@ -131,9 +137,7 @@ function MiniBtn({
 }
 
 function PanKnob({ value, onChange }: { value: number; onChange: (v: number) => void }) {
-  // value -1..1 => angle -135..135
   const angle = value * 135;
-  const ref = useRef<HTMLDivElement>(null);
   const dragging = useRef(false);
   const startY = useRef(0);
   const startVal = useRef(0);
@@ -155,45 +159,113 @@ function PanKnob({ value, onChange }: { value: number; onChange: (v: number) => 
   }, [onChange]);
 
   return (
-    <div className="flex flex-col items-center gap-0.5">
+    <div
+      onPointerDown={(e) => {
+        e.stopPropagation();
+        dragging.current = true;
+        startY.current = e.clientY;
+        startVal.current = value;
+      }}
+      onDoubleClick={(e) => { e.stopPropagation(); onChange(0); }}
+      className="relative h-6 w-6 rounded-full cursor-ns-resize"
+      style={{
+        background: "radial-gradient(circle at 35% 30%, hsl(0 0% 38%), hsl(0 0% 18%) 70%)",
+        border: "1px solid hsl(0 0% 8%)",
+        boxShadow: "0 1px 2px hsl(0 0% 0% / 0.6), inset 0 1px 0 hsl(0 0% 100% / 0.1)",
+      }}
+      title={`Pan: ${value === 0 ? "C" : `${value < 0 ? "L" : "R"}${Math.round(Math.abs(value) * 100)}`}`}
+    >
       <div
-        ref={ref}
-        onPointerDown={(e) => {
-          e.stopPropagation();
-          dragging.current = true;
-          startY.current = e.clientY;
-          startVal.current = value;
-        }}
-        onDoubleClick={(e) => { e.stopPropagation(); onChange(0); }}
-        className="relative h-9 w-9 rounded-full bg-gradient-to-br from-surface-3 to-background border border-border cursor-ns-resize select-none"
-        title="Pan (arraste vertical, dbl-click centro)"
-      >
-        <div
-          className="absolute left-1/2 top-1/2 h-3 w-0.5 -translate-x-1/2 origin-bottom bg-primary rounded-full"
-          style={{ transform: `translate(-50%, -100%) rotate(${angle}deg)`, transformOrigin: "50% 100%" }}
-        />
-      </div>
-      <span className="text-[9px] text-muted-foreground font-mono">
-        {value === 0 ? "C" : `${value < 0 ? "L" : "R"}${Math.round(Math.abs(value) * 100)}`}
-      </span>
+        className="absolute left-1/2 top-1 h-2 w-px bg-foreground"
+        style={{ transformOrigin: "50% 8px", transform: `translateX(-50%) rotate(${angle}deg)` }}
+      />
     </div>
   );
 }
 
-function VuMeter({ active }: { active: boolean }) {
-  const [level, setLevel] = useState(0);
+function FaderTrack({
+  value, onChange, onCommit,
+}: { value: number; onChange: (v: number) => void; onCommit: (v: number) => void }) {
+  const trackRef = useRef<HTMLDivElement>(null);
+  const dragging = useRef(false);
+
+  const setFromY = (clientY: number) => {
+    const el = trackRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const rel = 1 - Math.max(0, Math.min(1, (clientY - r.top) / r.height));
+    onChange(rel);
+  };
+
   useEffect(() => {
-    if (!active) { setLevel(0); return; }
-    const id = setInterval(() => {
-      setLevel(0.4 + Math.random() * 0.55);
-    }, 80);
-    return () => clearInterval(id);
-  }, [active]);
+    function move(e: PointerEvent) { if (dragging.current) setFromY(e.clientY); }
+    function up() {
+      if (dragging.current) onCommit(value);
+      dragging.current = false;
+    }
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    return () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+    };
+  }, [value, onCommit]);
+
+  // Tick marks at 0, -6, -12, -18, -24, -36 dB approx → slider positions
+  const ticks = [
+    { db: "0", pos: 0.5 },
+    { db: "6", pos: 0.36 },
+    { db: "12", pos: 0.27 },
+    { db: "18", pos: 0.21 },
+    { db: "24", pos: 0.15 },
+    { db: "36", pos: 0.08 },
+  ];
+
   return (
-    <div className="w-2 h-full bg-background rounded-sm overflow-hidden border border-border relative">
+    <div
+      ref={trackRef}
+      onPointerDown={(e) => {
+        e.stopPropagation();
+        dragging.current = true;
+        setFromY(e.clientY);
+      }}
+      onDoubleClick={(e) => { e.stopPropagation(); onChange(ampToSlider(1)); onCommit(ampToSlider(1)); }}
+      className="relative w-5 h-full cursor-ns-resize"
+    >
+      {/* Slot */}
+      <div className="absolute left-1/2 top-0 bottom-0 -translate-x-1/2 w-1 bg-black border border-border rounded-sm" />
+
+      {/* Ticks */}
+      {ticks.map((t) => (
+        <div key={t.db} className="absolute right-0 flex items-center gap-0.5" style={{ bottom: `calc(${t.pos * 100}% - 1px)` }}>
+          <div className="h-px w-1 bg-muted-foreground/60" />
+        </div>
+      ))}
+
+      {/* Cap */}
       <div
-        className="absolute bottom-0 left-0 right-0 vu-bar transition-all duration-75"
-        style={{ height: `${level * 100}%` }}
+        className="fader-cap absolute left-1/2 -translate-x-1/2 w-5 h-3 rounded-sm"
+        style={{ bottom: `calc(${value * 100}% - 6px)` }}
+      />
+    </div>
+  );
+}
+
+function VuMeter({ active, level, offset = 0 }: { active: boolean; level: number; offset?: number }) {
+  const [v, setV] = useState(0);
+  useEffect(() => {
+    if (!active) { setV(0); return; }
+    const id = setInterval(() => {
+      const base = level * 0.85;
+      setV(Math.min(1, Math.max(0, base + (Math.random() - 0.4) * 0.25 + offset)));
+    }, 60);
+    return () => clearInterval(id);
+  }, [active, level, offset]);
+  return (
+    <div className="relative w-1.5 h-full well rounded-sm overflow-hidden">
+      <div
+        className="absolute bottom-0 left-0 right-0 vu-bar transition-[height] duration-75"
+        style={{ height: `${v * 100}%` }}
       />
     </div>
   );
