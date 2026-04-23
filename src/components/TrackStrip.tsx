@@ -15,11 +15,24 @@ export function TrackStrip({ track, compact = true, groupColor }: Props) {
   const { api, config, selectedTrack, setSelectedTrack, transport } = useReaper();
   const [localVol, setLocalVol] = useState(() => ampToSlider(track.volume));
   const [localPan, setLocalPan] = useState(track.pan);
+  // Optimistic UI state for M / S / R — toggles immediately on click,
+  // then resyncs from the next poll.
+  const [optMute, setOptMute] = useState<boolean | null>(null);
+  const [optSolo, setOptSolo] = useState<boolean | null>(null);
+  const [optRec, setOptRec] = useState<boolean | null>(null);
   const isPlaying = transport?.playstate === 1;
   const selected = selectedTrack === track.index;
 
+  const muted = optMute ?? track.mute;
+  const soloed = optSolo ?? track.solo;
+  const armed = optRec ?? track.recarm;
+
   useEffect(() => { setLocalVol(ampToSlider(track.volume)); }, [track.volume]);
   useEffect(() => { setLocalPan(track.pan); }, [track.pan]);
+  // Reconcile optimistic state once the server confirms it (or stops drifting).
+  useEffect(() => { if (optMute !== null && optMute === track.mute) setOptMute(null); }, [track.mute, optMute]);
+  useEffect(() => { if (optSolo !== null && optSolo === track.solo) setOptSolo(null); }, [track.solo, optSolo]);
+  useEffect(() => { if (optRec !== null && optRec === track.recarm) setOptRec(null); }, [track.recarm, optRec]);
 
   const commitVol = (v: number) => api.setVolume(config, track.index, v).catch(() => undefined);
   const commitPan = (v: number) => api.setPan(config, track.index, v).catch(() => undefined);
