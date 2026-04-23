@@ -97,7 +97,14 @@ export interface Track {
   solo: boolean;
   recarm: boolean;
   isMaster: boolean;
+  isFolder: boolean;
+  folderDepth: number; // 1 starts a folder, -1 ends, 0 normal
+  selected: boolean;
+  hasFx: boolean;
+  peakL: number; // 0..1+ amplitude (last peak L)
+  peakR: number; // 0..1+ amplitude (last peak R)
   color?: string;
+  fx: string[]; // names of FX on this track
 }
 
 // TRACK rows: TRACK\tindex\tname\tflags\tvolume\tpan\tlast_meter_peak\tlast_meter_pos\twidth_or_pan2\tpan_mode\tsendcnt\trecvcnt\thwoutcnt\tcolor
