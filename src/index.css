@@ -47,6 +47,10 @@
     --solo: 210 90% 55%;
     --mute: 45 95% 55%;
 
+    --vu-green: 140 70% 42%;
+    --vu-yellow: 50 95% 55%;
+    --vu-red: 0 80% 55%;
+
     --border: 0 0% 10%;
     --border-light: 0 0% 32%;
     --input: 0 0% 13%;
