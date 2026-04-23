@@ -108,9 +108,7 @@ export interface Track {
 }
 
 // TRACK rows: TRACK\tindex\tname\tflags\tvolume\tpan\tlast_meter_peak\tlast_meter_pos\twidth_or_pan2\tpan_mode\tsendcnt\trecvcnt\thwoutcnt\tcolor
-// flags bits: &1 folder, &2 selected, &4 has_FX, &8 muted, &16 soloed (or &32?), &64 recarm
-// Per REAPER docs: mute=8, solo=16, recarm=64, ...
-// We'll parse defensively.
+// flags bits per REAPER docs: folder=1, selected=2, hasFx=4, mute=8, solo=16/32, recarm=64
 export function parseTracks(body: string): Track[] {
   const lines = body.split("\n").filter((l) => l.startsWith("TRACK"));
   const tracks: Track[] = [];
@@ -121,7 +119,11 @@ export function parseTracks(body: string): Track[] {
     const flags = parseInt(c[3] ?? "0", 10);
     const volume = parseFloat(c[4] ?? "1");
     const pan = parseFloat(c[5] ?? "0");
+    const peakLast = parseFloat(c[6] ?? "0"); // mono peak in dB
     const color = c[13] && c[13] !== "0" ? c[13] : undefined;
+
+    // peak comes as dB float (e.g. -inf..0). Convert to 0..1 amplitude approx.
+    const peak = Number.isFinite(peakLast) ? Math.pow(10, peakLast / 20) : 0;
 
     tracks.push({
       index: idx,
@@ -129,10 +131,17 @@ export function parseTracks(body: string): Track[] {
       volume: Number.isFinite(volume) ? volume : 1,
       pan: Number.isFinite(pan) ? pan : 0,
       mute: (flags & 8) !== 0,
-      solo: (flags & 16) !== 0,
+      solo: (flags & 16) !== 0 || (flags & 32) !== 0,
       recarm: (flags & 64) !== 0,
       isMaster: idx === 0,
+      isFolder: (flags & 1) !== 0,
+      folderDepth: 0,
+      selected: (flags & 2) !== 0,
+      hasFx: (flags & 4) !== 0,
+      peakL: peak,
+      peakR: peak,
       color,
+      fx: [],
     });
   }
   return tracks;
