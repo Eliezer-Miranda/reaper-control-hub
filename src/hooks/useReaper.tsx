@@ -61,6 +61,7 @@ export function ReaperProvider({ children }: { children: ReactNode }) {
   const pollRef = useRef<number | null>(null);
   const trackRef = useRef<number | null>(null);
   const fxRef = useRef<number | null>(null);
+  const vuRef = useRef<number | null>(null);
   const reconnectRef = useRef<number | null>(null);
 
   const setConfig = useCallback((c: ConnectionConfig) => {
@@ -72,6 +73,7 @@ export function ReaperProvider({ children }: { children: ReactNode }) {
     if (pollRef.current) { window.clearInterval(pollRef.current); pollRef.current = null; }
     if (trackRef.current) { window.clearInterval(trackRef.current); trackRef.current = null; }
     if (fxRef.current) { window.clearInterval(fxRef.current); fxRef.current = null; }
+    if (vuRef.current) { window.clearInterval(vuRef.current); vuRef.current = null; }
   }, []);
 
   const startPolling = useCallback(() => {
