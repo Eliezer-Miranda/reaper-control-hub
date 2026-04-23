@@ -271,6 +271,16 @@ export const reaperApi = {
       return null;
     }
   },
+  // Get VU peak for a single track. Returns 0..1 normalized.
+  async getTrackVu(cfg: ConnectionConfig, idx: number): Promise<{ peakL: number; peakR: number } | null> {
+    try {
+      const r = await callProxy(cfg, `/_/GET/TRACK/${idx}/VU`);
+      if (!r.ok) return null;
+      return parseVu(r.body);
+    } catch {
+      return null;
+    }
+  },
   setVolume(cfg: ConnectionConfig, idx: number, slider: number) {
     const amp = sliderToAmp(slider);
     return callProxy(cfg, `/_/SET/TRACK/${idx}/VOL/${amp.toFixed(4)}`);
