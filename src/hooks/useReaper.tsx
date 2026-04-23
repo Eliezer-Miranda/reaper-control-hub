@@ -188,9 +188,9 @@ export function ReaperProvider({ children }: { children: ReactNode }) {
     config, setConfig, status, transport, tracks,
     selectedTrack, setSelectedTrack, bpm, setBpm,
     loop, metronome, toggleLoop, toggleMetronome,
-    connect, disconnect, api: reaperApi, lastError,
+    connect, disconnect, api: reaperApi, lastError, projectName,
   }), [config, setConfig, status, transport, tracks, selectedTrack, bpm, setBpm,
-       loop, metronome, toggleLoop, toggleMetronome, connect, disconnect, lastError]);
+       loop, metronome, toggleLoop, toggleMetronome, connect, disconnect, lastError, projectName]);
 
   return <ReaperCtx.Provider value={value}>{children}</ReaperCtx.Provider>;
 }
