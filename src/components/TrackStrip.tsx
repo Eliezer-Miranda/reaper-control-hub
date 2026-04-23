@@ -3,13 +3,14 @@ import { useReaper } from "@/hooks/useReaper";
 import { ampToSlider, formatDb, sliderToAmp } from "@/lib/reaperApi";
 import { cn } from "@/lib/utils";
 import { useEffect, useRef, useState } from "react";
-import { ChevronDown, Circle, Volume2 } from "lucide-react";
+import { ChevronDown, Circle } from "lucide-react";
 
 interface Props {
   track: Track;
+  compact?: boolean;
 }
 
-export function TrackStrip({ track }: Props) {
+export function TrackStrip({ track, compact = true }: Props) {
   const { api, config, selectedTrack, setSelectedTrack, transport } = useReaper();
   const [localVol, setLocalVol] = useState(() => ampToSlider(track.volume));
   const [localPan, setLocalPan] = useState(track.pan);
@@ -22,33 +23,27 @@ export function TrackStrip({ track }: Props) {
   const commitVol = (v: number) => api.setVolume(config, track.index, v).catch(() => undefined);
   const commitPan = (v: number) => api.setPan(config, track.index, v).catch(() => undefined);
 
-  const label = track.isMaster ? "MASTER" : (track.name || `Entrada ${track.index}`);
+  const label = track.isMaster ? "MASTER" : (track.name || `${track.index}`);
+  const width = compact ? "w-[58px]" : "w-[78px]";
 
   return (
     <div
       onClick={() => setSelectedTrack(track.index)}
       className={cn(
-        "flex flex-col items-stretch w-[78px] shrink-0 select-none",
+        "flex flex-col items-stretch shrink-0 select-none",
+        width,
         "bg-surface border-l border-r border-border cursor-pointer",
         selected && "bg-surface-2",
       )}
     >
-      {/* Header: track name dropdown */}
-      <div className="flex items-center gap-1 px-1 py-0.5 bg-surface-3 border-b border-border h-5">
+      {/* Header: track name */}
+      <div className="flex items-center gap-0.5 px-1 py-0.5 bg-surface-3 border-b border-border h-5">
         <span className="text-[10px] truncate flex-1 text-foreground/90">{label}</span>
         <ChevronDown className="h-2.5 w-2.5 text-muted-foreground shrink-0" />
       </div>
 
-      {/* Input row: in / IN / FX */}
-      <div className="flex items-center gap-0.5 px-1 py-0.5 border-b border-border h-5">
-        <span className="text-[9px] text-muted-foreground flex-1">in</span>
-        <ChevronDown className="h-2 w-2 text-muted-foreground" />
-        <div className="px-1 text-[8px] bg-surface-3 border border-border rounded-sm leading-tight">IN</div>
-        <div className="px-1 text-[8px] bg-surface-3 border border-border rounded-sm leading-tight ml-0.5">FX</div>
-      </div>
-
       {/* Pan knob centered */}
-      <div className="flex justify-center py-1.5 border-b border-border">
+      <div className="flex justify-center py-1 border-b border-border">
         <PanKnob value={localPan} onChange={(v) => { setLocalPan(v); commitPan(v); }} />
       </div>
 
@@ -58,7 +53,7 @@ export function TrackStrip({ track }: Props) {
       </div>
 
       {/* Mute / Solo */}
-      <div className="flex gap-0.5 px-1 py-1 border-b border-border">
+      <div className="flex gap-0.5 px-1 py-0.5 border-b border-border">
         <MiniBtn
           active={track.mute}
           activeClass="bg-mute text-black"
@@ -71,14 +66,12 @@ export function TrackStrip({ track }: Props) {
         >S</MiniBtn>
       </div>
 
-      {/* Fader area: dual VU + fader on right */}
-      <div className="flex gap-1 px-1 py-2 h-[200px] justify-center">
-        {/* Two VU columns (L/R) like REAPER */}
-        <div className="flex gap-px w-3">
-          <VuMeter active={isPlaying && !track.mute} level={localVol} />
-          <VuMeter active={isPlaying && !track.mute} level={localVol} offset={0.05} />
+      {/* Fader area: real VU + fader */}
+      <div className="flex gap-0.5 px-1 py-1.5 h-[160px] justify-center">
+        <div className="flex gap-px w-2.5">
+          <VuMeter active={isPlaying && !track.mute} peak={track.peakL} />
+          <VuMeter active={isPlaying && !track.mute} peak={track.peakR} />
         </div>
-        {/* Fader track + cap */}
         <FaderTrack
           value={localVol}
           onChange={(v) => setLocalVol(v)}
@@ -86,24 +79,43 @@ export function TrackStrip({ track }: Props) {
         />
       </div>
 
-      {/* FX / Route placeholder buttons (inactive but for look) */}
-      <div className="flex gap-0.5 px-1 py-0.5 border-t border-border">
-        <div className="flex-1 text-center text-[9px] bg-surface-2 border border-border rounded-sm py-0.5">FX</div>
+      {/* FX list */}
+      <div className="px-1 py-0.5 border-t border-border min-h-[18px]">
+        {track.fx.length === 0 ? (
+          <div className="text-[8px] text-muted-foreground/60 text-center leading-tight">
+            {track.hasFx ? "…" : "—"}
+          </div>
+        ) : (
+          <div className="flex flex-col gap-px">
+            {track.fx.slice(0, 3).map((name, i) => (
+              <div
+                key={i}
+                title={name}
+                className="text-[8px] leading-tight truncate bg-primary/20 text-primary border border-primary/30 rounded-sm px-0.5"
+              >
+                {name.replace(/^(VST3?:|VSTi?:|JS:|AU:)\s*/, "").split("(")[0].trim()}
+              </div>
+            ))}
+            {track.fx.length > 3 && (
+              <div className="text-[8px] text-muted-foreground text-center">+{track.fx.length - 3}</div>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* Record arm circle */}
-      <div className="flex justify-center py-1.5 border-t border-border">
+      {/* Record arm */}
+      <div className="flex justify-center py-1 border-t border-border">
         <button
           onClick={(e) => { e.stopPropagation(); api.setRecArm(config, track.index, !track.recarm); }}
           title="Record arm"
           className={cn(
-            "h-5 w-5 rounded-full border-2 flex items-center justify-center transition-colors",
+            "h-4 w-4 rounded-full border-2 flex items-center justify-center transition-colors",
             track.recarm
               ? "border-record bg-record/30 animate-record"
               : "border-border-light bg-surface-3 hover:bg-surface-2",
           )}
         >
-          <Circle className={cn("h-2 w-2", track.recarm ? "fill-record text-record" : "fill-muted-foreground/40 text-muted-foreground/40")} />
+          <Circle className={cn("h-1.5 w-1.5", track.recarm ? "fill-record text-record" : "fill-muted-foreground/40 text-muted-foreground/40")} />
         </button>
       </div>
 
@@ -167,7 +179,7 @@ function PanKnob({ value, onChange }: { value: number; onChange: (v: number) => 
         startVal.current = value;
       }}
       onDoubleClick={(e) => { e.stopPropagation(); onChange(0); }}
-      className="relative h-6 w-6 rounded-full cursor-ns-resize"
+      className="relative h-5 w-5 rounded-full cursor-ns-resize"
       style={{
         background: "radial-gradient(circle at 35% 30%, hsl(0 0% 38%), hsl(0 0% 18%) 70%)",
         border: "1px solid hsl(0 0% 8%)",
@@ -176,8 +188,8 @@ function PanKnob({ value, onChange }: { value: number; onChange: (v: number) => 
       title={`Pan: ${value === 0 ? "C" : `${value < 0 ? "L" : "R"}${Math.round(Math.abs(value) * 100)}`}`}
     >
       <div
-        className="absolute left-1/2 top-1 h-2 w-px bg-foreground"
-        style={{ transformOrigin: "50% 8px", transform: `translateX(-50%) rotate(${angle}deg)` }}
+        className="absolute left-1/2 top-0.5 h-1.5 w-px bg-foreground"
+        style={{ transformOrigin: "50% 7px", transform: `translateX(-50%) rotate(${angle}deg)` }}
       />
     </div>
   );
@@ -211,14 +223,12 @@ function FaderTrack({
     };
   }, [value, onCommit]);
 
-  // Tick marks at 0, -6, -12, -18, -24, -36 dB approx → slider positions
   const ticks = [
     { db: "0", pos: 0.5 },
     { db: "6", pos: 0.36 },
     { db: "12", pos: 0.27 },
     { db: "18", pos: 0.21 },
     { db: "24", pos: 0.15 },
-    { db: "36", pos: 0.08 },
   ];
 
   return (
@@ -230,43 +240,59 @@ function FaderTrack({
         setFromY(e.clientY);
       }}
       onDoubleClick={(e) => { e.stopPropagation(); onChange(ampToSlider(1)); onCommit(ampToSlider(1)); }}
-      className="relative w-5 h-full cursor-ns-resize"
+      className="relative w-4 h-full cursor-ns-resize"
     >
-      {/* Slot */}
       <div className="absolute left-1/2 top-0 bottom-0 -translate-x-1/2 w-1 bg-black border border-border rounded-sm" />
-
-      {/* Ticks */}
       {ticks.map((t) => (
         <div key={t.db} className="absolute right-0 flex items-center gap-0.5" style={{ bottom: `calc(${t.pos * 100}% - 1px)` }}>
           <div className="h-px w-1 bg-muted-foreground/60" />
         </div>
       ))}
-
-      {/* Cap */}
       <div
-        className="fader-cap absolute left-1/2 -translate-x-1/2 w-5 h-3 rounded-sm"
-        style={{ bottom: `calc(${value * 100}% - 6px)` }}
+        className="fader-cap absolute left-1/2 -translate-x-1/2 w-4 h-2.5 rounded-sm"
+        style={{ bottom: `calc(${value * 100}% - 5px)` }}
       />
     </div>
   );
 }
 
-function VuMeter({ active, level, offset = 0 }: { active: boolean; level: number; offset?: number }) {
+// Real VU meter — uses the actual peak amplitude from REAPER (track.peakL/R)
+// Falls back to a slow decay so jumps look natural between polls.
+function VuMeter({ active, peak }: { active: boolean; peak: number }) {
   const [v, setV] = useState(0);
+  const target = useRef(0);
+
   useEffect(() => {
-    if (!active) { setV(0); return; }
-    const id = setInterval(() => {
-      const base = level * 0.85;
-      setV(Math.min(1, Math.max(0, base + (Math.random() - 0.4) * 0.25 + offset)));
-    }, 60);
-    return () => clearInterval(id);
-  }, [active, level, offset]);
+    if (!active) { target.current = 0; return; }
+    // amplitude 0..1+ → clamp
+    target.current = Math.min(1, Math.max(0, peak));
+  }, [peak, active]);
+
+  useEffect(() => {
+    let raf = 0;
+    const tick = () => {
+      setV((cur) => {
+        const t = active ? target.current : 0;
+        // attack fast, release slow
+        const next = t > cur ? cur + (t - cur) * 0.6 : cur + (t - cur) * 0.08;
+        return next;
+      });
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [active]);
+
+  // Color zones: green 0-70%, yellow 70-90%, red 90-100%
+  const greenH = Math.min(v, 0.7) * 100;
+  const yellowH = Math.max(0, Math.min(v, 0.9) - 0.7) * 100;
+  const redH = Math.max(0, v - 0.9) * 100;
+
   return (
-    <div className="relative w-1.5 h-full well rounded-sm overflow-hidden">
-      <div
-        className="absolute bottom-0 left-0 right-0 vu-bar transition-[height] duration-75"
-        style={{ height: `${v * 100}%` }}
-      />
+    <div className="relative w-1.5 h-full well rounded-sm overflow-hidden flex flex-col-reverse">
+      <div className="bg-vu-green" style={{ height: `${greenH}%` }} />
+      <div className="bg-vu-yellow" style={{ height: `${yellowH}%` }} />
+      <div className="bg-vu-red" style={{ height: `${redH}%` }} />
     </div>
   );
 }

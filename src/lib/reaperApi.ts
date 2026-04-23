@@ -97,13 +97,18 @@ export interface Track {
   solo: boolean;
   recarm: boolean;
   isMaster: boolean;
+  isFolder: boolean;
+  folderDepth: number; // 1 starts a folder, -1 ends, 0 normal
+  selected: boolean;
+  hasFx: boolean;
+  peakL: number; // 0..1+ amplitude (last peak L)
+  peakR: number; // 0..1+ amplitude (last peak R)
   color?: string;
+  fx: string[]; // names of FX on this track
 }
 
 // TRACK rows: TRACK\tindex\tname\tflags\tvolume\tpan\tlast_meter_peak\tlast_meter_pos\twidth_or_pan2\tpan_mode\tsendcnt\trecvcnt\thwoutcnt\tcolor
-// flags bits: &1 folder, &2 selected, &4 has_FX, &8 muted, &16 soloed (or &32?), &64 recarm
-// Per REAPER docs: mute=8, solo=16, recarm=64, ...
-// We'll parse defensively.
+// flags bits per REAPER docs: folder=1, selected=2, hasFx=4, mute=8, solo=16/32, recarm=64
 export function parseTracks(body: string): Track[] {
   const lines = body.split("\n").filter((l) => l.startsWith("TRACK"));
   const tracks: Track[] = [];
@@ -114,7 +119,11 @@ export function parseTracks(body: string): Track[] {
     const flags = parseInt(c[3] ?? "0", 10);
     const volume = parseFloat(c[4] ?? "1");
     const pan = parseFloat(c[5] ?? "0");
+    const peakLast = parseFloat(c[6] ?? "0"); // mono peak in dB
     const color = c[13] && c[13] !== "0" ? c[13] : undefined;
+
+    // peak comes as dB float (e.g. -inf..0). Convert to 0..1 amplitude approx.
+    const peak = Number.isFinite(peakLast) ? Math.pow(10, peakLast / 20) : 0;
 
     tracks.push({
       index: idx,
@@ -122,10 +131,17 @@ export function parseTracks(body: string): Track[] {
       volume: Number.isFinite(volume) ? volume : 1,
       pan: Number.isFinite(pan) ? pan : 0,
       mute: (flags & 8) !== 0,
-      solo: (flags & 16) !== 0,
+      solo: (flags & 16) !== 0 || (flags & 32) !== 0,
       recarm: (flags & 64) !== 0,
       isMaster: idx === 0,
+      isFolder: (flags & 1) !== 0,
+      folderDepth: 0,
+      selected: (flags & 2) !== 0,
+      hasFx: (flags & 4) !== 0,
+      peakL: peak,
+      peakR: peak,
       color,
+      fx: [],
     });
   }
   return tracks;
@@ -181,6 +197,41 @@ export const reaperApi = {
     const r = await callProxy(cfg, "/_/TRACK");
     if (!r.ok) return [];
     return parseTracks(r.body);
+  },
+  // Get FX list for a single track.
+  async getTrackFx(cfg: ConnectionConfig, idx: number): Promise<string[]> {
+    try {
+      const r = await callProxy(cfg, `/_/GET/TRACK/${idx}/FX`);
+      if (!r.ok) return [];
+      return r.body
+        .split("\n")
+        .filter((l) => l.startsWith("FX"))
+        .map((l) => l.split("\t")[3] ?? "")
+        .filter(Boolean);
+    } catch {
+      return [];
+    }
+  },
+  // Try to get the project name.
+  async getProjectName(cfg: ConnectionConfig): Promise<string | null> {
+    try {
+      const r = await callProxy(cfg, "/_/PROJECT");
+      if (!r.ok) return null;
+      const line = r.body.split("\n").find((l) => l.startsWith("PROJECT"));
+      if (line) {
+        const cols = line.split("\t");
+        const n = (cols[1] ?? "").trim();
+        if (n) return n.replace(/\.rpp$/i, "");
+      }
+      const nameLine = r.body.split("\n").find((l) => l.startsWith("NAME"));
+      if (nameLine) {
+        const n = nameLine.split("\t")[1] ?? "";
+        if (n) return n.replace(/\.rpp$/i, "");
+      }
+      return null;
+    } catch {
+      return null;
+    }
   },
   setVolume(cfg: ConnectionConfig, idx: number, slider: number) {
     const amp = sliderToAmp(slider);
