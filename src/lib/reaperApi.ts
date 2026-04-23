@@ -107,23 +107,50 @@ export interface Track {
   fx: string[]; // names of FX on this track
 }
 
-// TRACK rows: TRACK\tindex\tname\tflags\tvolume\tpan\tlast_meter_peak\tlast_meter_pos\twidth_or_pan2\tpan_mode\tsendcnt\trecvcnt\thwoutcnt\tcolor
-// flags bits per REAPER docs: folder=1, selected=2, hasFx=4, mute=8, solo=16/32, recarm=64
+// TRACK rows from REAPER web interface:
+// TRACK \t name \t flags \t volume \t pan \t last_meter_peak \t last_meter_pos \t width \t pan2 \t panmode \t sendcnt \t recvcnt \t hwoutcnt \t color
+// NOTE: REAPER does NOT include the index column in v6+. The index is the row order (0=master, 1..N).
+// Older builds DO include the index. We auto-detect which schema is in use.
+// flags bits: folder=1, selected=2, hasFx=4, mute=8, soloOn=16, soloDef=32, recarm=64
 export function parseTracks(body: string): Track[] {
   const lines = body.split("\n").filter((l) => l.startsWith("TRACK"));
   const tracks: Track[] = [];
+  let autoIdx = 0;
   for (const l of lines) {
     const c = l.split("\t");
-    const idx = parseInt(c[1] ?? "0", 10);
-    const name = c[2] ?? "";
-    const flags = parseInt(c[3] ?? "0", 10);
-    const volume = parseFloat(c[4] ?? "1");
-    const pan = parseFloat(c[5] ?? "0");
-    const peakLast = parseFloat(c[6] ?? "0"); // mono peak in dB
-    const color = c[13] && c[13] !== "0" ? c[13] : undefined;
+    // Detect schema: if c[1] is a pure integer AND c[2] looks like a name/empty AND c[3] is integer flags,
+    // we have the "index-included" variant. Otherwise the modern variant where c[1]=name.
+    const c1IsInt = /^-?\d+$/.test(c[1] ?? "");
+    const c3IsInt = /^-?\d+$/.test(c[3] ?? "");
+    let idx: number, name: string, flags: number, volume: number, pan: number, peakLast: number, color: string | undefined;
+    if (c1IsInt && c3IsInt) {
+      // index-included
+      idx = parseInt(c[1], 10);
+      name = c[2] ?? "";
+      flags = parseInt(c[3] ?? "0", 10);
+      volume = parseFloat(c[4] ?? "1");
+      pan = parseFloat(c[5] ?? "0");
+      peakLast = parseFloat(c[6] ?? "-150");
+      color = c[13] && c[13] !== "0" ? c[13] : undefined;
+    } else {
+      // modern (no index in row)
+      idx = autoIdx;
+      name = c[1] ?? "";
+      flags = parseInt(c[2] ?? "0", 10);
+      volume = parseFloat(c[3] ?? "1");
+      pan = parseFloat(c[4] ?? "0");
+      peakLast = parseFloat(c[5] ?? "-150");
+      color = c[12] && c[12] !== "0" ? c[12] : undefined;
+    }
+    autoIdx++;
 
-    // peak comes as dB float (e.g. -inf..0). Convert to 0..1 amplitude approx.
-    const peak = Number.isFinite(peakLast) ? Math.pow(10, peakLast / 20) : 0;
+    // peakLast is dB. Map dB → 0..1 with -60dB floor for visible range.
+    let peak = 0;
+    if (Number.isFinite(peakLast)) {
+      const db = peakLast;
+      // Normalize: -60dB = 0, 0dB = 0.85, +6dB = 1.0
+      peak = Math.max(0, Math.min(1, (db + 60) / 66));
+    }
 
     tracks.push({
       index: idx,
@@ -145,6 +172,17 @@ export function parseTracks(body: string): Track[] {
     });
   }
   return tracks;
+}
+
+// Parse VU response: VU \t peakL_dB \t peakR_dB \t rmsL_dB \t rmsR_dB
+export function parseVu(body: string): { peakL: number; peakR: number } | null {
+  const line = body.split("\n").find((l) => l.startsWith("VU"));
+  if (!line) return null;
+  const c = line.split("\t");
+  const dbL = parseFloat(c[1] ?? "-150");
+  const dbR = parseFloat(c[2] ?? "-150");
+  const norm = (db: number) => Number.isFinite(db) ? Math.max(0, Math.min(1, (db + 60) / 66)) : 0;
+  return { peakL: norm(dbL), peakR: norm(dbR) };
 }
 
 // Volume mapping: REAPER uses linear amplitude where 1.0 = 0dB.
