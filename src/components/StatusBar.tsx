@@ -40,6 +40,11 @@ export function StatusBar() {
       <div className="flex-1" />
       {flash && <span className="text-primary truncate max-w-md">{flash}</span>}
       {lastError && !flash && <span className="text-destructive truncate max-w-md">{lastError}</span>}
+      <span className="text-muted-foreground">·</span>
+      <span className="text-muted-foreground">
+        Dev. <span className="text-primary font-bold">Zertec</span>
+        <span className="text-muted-foreground/70"> — Zertec Redes e Sistemas</span>
+      </span>
     </div>
   );
 }
