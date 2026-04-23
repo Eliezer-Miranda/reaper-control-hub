@@ -61,6 +61,9 @@ export default {
         record: "hsl(var(--record))",
         solo: "hsl(var(--solo))",
         mute: "hsl(var(--mute))",
+        "vu-green": "hsl(var(--vu-green))",
+        "vu-yellow": "hsl(var(--vu-yellow))",
+        "vu-red": "hsl(var(--vu-red))",
         sidebar: {
           DEFAULT: "hsl(var(--sidebar-background))",
           foreground: "hsl(var(--sidebar-foreground))",
