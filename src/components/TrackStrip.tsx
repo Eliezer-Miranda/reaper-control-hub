@@ -27,9 +27,20 @@ export function TrackStrip({ track, compact = true, groupColor }: Props) {
   const label = track.isMaster ? "MASTER" : (track.name || `${track.index}`);
   const width = compact ? "w-[58px]" : "w-[78px]";
 
+  const headerStyle = groupColor
+    ? {
+        background: `linear-gradient(180deg, hsl(${groupColor} / 0.85), hsl(${groupColor} / 0.55))`,
+        borderBottom: `1px solid hsl(${groupColor} / 0.7)`,
+      }
+    : undefined;
+  const sideStyle = groupColor
+    ? { borderLeftColor: `hsl(${groupColor} / 0.5)`, borderRightColor: `hsl(${groupColor} / 0.5)` }
+    : undefined;
+
   return (
     <div
       onClick={() => setSelectedTrack(track.index)}
+      style={sideStyle}
       className={cn(
         "flex flex-col items-stretch shrink-0 select-none",
         width,
@@ -37,10 +48,20 @@ export function TrackStrip({ track, compact = true, groupColor }: Props) {
         selected && "bg-surface-2",
       )}
     >
-      {/* Header: track name */}
-      <div className="flex items-center gap-0.5 px-1 py-0.5 bg-surface-3 border-b border-border h-5">
-        <span className="text-[10px] truncate flex-1 text-foreground/90">{label}</span>
-        <ChevronDown className="h-2.5 w-2.5 text-muted-foreground shrink-0" />
+      {/* Header: track name (tinted by group color) */}
+      <div
+        className="flex items-center gap-0.5 px-1 py-0.5 border-b border-border h-5 bg-surface-3"
+        style={headerStyle}
+      >
+        <span
+          className={cn(
+            "text-[10px] truncate flex-1 font-medium",
+            groupColor ? "text-black/85" : "text-foreground/90",
+          )}
+        >
+          {label}
+        </span>
+        <ChevronDown className={cn("h-2.5 w-2.5 shrink-0", groupColor ? "text-black/60" : "text-muted-foreground")} />
       </div>
 
       {/* Pan knob centered */}
