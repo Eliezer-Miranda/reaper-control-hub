@@ -90,22 +90,32 @@ export function TrackStrip({ track, compact = true, groupColor }: Props) {
       {/* Mute / Solo */}
       <div className="flex gap-0.5 px-1 py-0.5 border-b border-border">
         <MiniBtn
-          active={track.mute}
-          activeClass="bg-mute text-black"
-          onClick={(e) => { e.stopPropagation(); api.setMute(config, track.index, !track.mute); }}
+          active={muted}
+          activeClass="bg-mute text-black shadow-[inset_0_0_0_1px_hsl(var(--mute))]"
+          onClick={(e) => {
+            e.stopPropagation();
+            const next = !muted;
+            setOptMute(next);
+            api.setMute(config, track.index, next).catch(() => setOptMute(null));
+          }}
         >M</MiniBtn>
         <MiniBtn
-          active={track.solo}
-          activeClass="bg-solo text-white"
-          onClick={(e) => { e.stopPropagation(); api.setSolo(config, track.index, !track.solo); }}
+          active={soloed}
+          activeClass="bg-solo text-white shadow-[inset_0_0_0_1px_hsl(var(--solo))]"
+          onClick={(e) => {
+            e.stopPropagation();
+            const next = !soloed;
+            setOptSolo(next);
+            api.setSolo(config, track.index, next).catch(() => setOptSolo(null));
+          }}
         >S</MiniBtn>
       </div>
 
       {/* Fader area: real VU + fader */}
       <div className="flex gap-0.5 px-1 py-1.5 h-[160px] justify-center">
         <div className="flex gap-px w-2.5">
-          <VuMeter active={isPlaying && !track.mute} peak={track.peakL} />
-          <VuMeter active={isPlaying && !track.mute} peak={track.peakR} />
+          <VuMeter active={isPlaying && !muted} peak={track.peakL} />
+          <VuMeter active={isPlaying && !muted} peak={track.peakR} />
         </div>
         <FaderTrack
           value={localVol}
@@ -141,16 +151,21 @@ export function TrackStrip({ track, compact = true, groupColor }: Props) {
       {/* Record arm */}
       <div className="flex justify-center py-1 border-t border-border">
         <button
-          onClick={(e) => { e.stopPropagation(); api.setRecArm(config, track.index, !track.recarm); }}
+          onClick={(e) => {
+            e.stopPropagation();
+            const next = !armed;
+            setOptRec(next);
+            api.setRecArm(config, track.index, next).catch(() => setOptRec(null));
+          }}
           title="Record arm"
           className={cn(
             "h-4 w-4 rounded-full border-2 flex items-center justify-center transition-colors",
-            track.recarm
-              ? "border-record bg-record/30 animate-record"
-              : "border-border-light bg-surface-3 hover:bg-surface-2",
+            armed
+              ? "border-record bg-record shadow-[0_0_8px_hsl(var(--record)/0.8)] animate-pulse"
+              : "border-border bg-surface-3 hover:bg-surface-2",
           )}
         >
-          <Circle className={cn("h-1.5 w-1.5", track.recarm ? "fill-record text-record" : "fill-muted-foreground/40 text-muted-foreground/40")} />
+          <Circle className={cn("h-1.5 w-1.5", armed ? "fill-white text-white" : "fill-muted-foreground/40 text-muted-foreground/40")} />
         </button>
       </div>
 
