@@ -8,9 +8,10 @@ import { ChevronDown, Circle } from "lucide-react";
 interface Props {
   track: Track;
   compact?: boolean;
+  groupColor?: string; // "H S% L%" hsl triplet
 }
 
-export function TrackStrip({ track, compact = true }: Props) {
+export function TrackStrip({ track, compact = true, groupColor }: Props) {
   const { api, config, selectedTrack, setSelectedTrack, transport } = useReaper();
   const [localVol, setLocalVol] = useState(() => ampToSlider(track.volume));
   const [localPan, setLocalPan] = useState(track.pan);
