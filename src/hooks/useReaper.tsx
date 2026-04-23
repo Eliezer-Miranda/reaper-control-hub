@@ -56,9 +56,11 @@ export function ReaperProvider({ children }: { children: ReactNode }) {
   const [loop, setLoop] = useState(false);
   const [metronome, setMetronome] = useState(false);
   const [lastError, setLastError] = useState<string | null>(null);
+  const [projectName, setProjectName] = useState<string | null>(null);
 
   const pollRef = useRef<number | null>(null);
   const trackRef = useRef<number | null>(null);
+  const fxRef = useRef<number | null>(null);
   const reconnectRef = useRef<number | null>(null);
 
   const setConfig = useCallback((c: ConnectionConfig) => {
@@ -69,6 +71,7 @@ export function ReaperProvider({ children }: { children: ReactNode }) {
   const stopPolling = useCallback(() => {
     if (pollRef.current) { window.clearInterval(pollRef.current); pollRef.current = null; }
     if (trackRef.current) { window.clearInterval(trackRef.current); trackRef.current = null; }
+    if (fxRef.current) { window.clearInterval(fxRef.current); fxRef.current = null; }
   }, []);
 
   const startPolling = useCallback(() => {
@@ -91,12 +94,37 @@ export function ReaperProvider({ children }: { children: ReactNode }) {
       }
     }, 500);
 
+    // Track polling — fast for VU meters
     trackRef.current = window.setInterval(async () => {
       try {
         const list = await reaperApi.getTracks(config);
-        if (list.length) setTracks(list);
+        if (list.length) {
+          setTracks((prev) => {
+            // Preserve fx list across refresh
+            const fxMap = new Map(prev.map((t) => [t.index, t.fx]));
+            return list.map((t) => ({ ...t, fx: fxMap.get(t.index) ?? [] }));
+          });
+        }
       } catch { /* handled by transport poll */ }
-    }, 2000);
+    }, 250);
+
+    // FX polling — slower
+    fxRef.current = window.setInterval(async () => {
+      try {
+        const current = await reaperApi.getTracks(config);
+        if (!current.length) return;
+        const fxResults = await Promise.all(
+          current.filter((t) => !t.isMaster && t.hasFx).map(async (t) => ({
+            index: t.index,
+            fx: await reaperApi.getTrackFx(config, t.index),
+          })),
+        );
+        const fxMap = new Map(fxResults.map((r) => [r.index, r.fx]));
+        setTracks((prev) => prev.map((t) => ({ ...t, fx: fxMap.get(t.index) ?? t.fx })));
+        const name = await reaperApi.getProjectName(config);
+        if (name) setProjectName(name);
+      } catch { /* noop */ }
+    }, 4000);
   }, [config, stopPolling]);
 
   const scheduleReconnect = useCallback(() => {
