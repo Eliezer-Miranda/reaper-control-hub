@@ -198,6 +198,41 @@ export const reaperApi = {
     if (!r.ok) return [];
     return parseTracks(r.body);
   },
+  // Get FX list for a single track.
+  async getTrackFx(cfg: ConnectionConfig, idx: number): Promise<string[]> {
+    try {
+      const r = await callProxy(cfg, `/_/GET/TRACK/${idx}/FX`);
+      if (!r.ok) return [];
+      return r.body
+        .split("\n")
+        .filter((l) => l.startsWith("FX"))
+        .map((l) => l.split("\t")[3] ?? "")
+        .filter(Boolean);
+    } catch {
+      return [];
+    }
+  },
+  // Try to get the project name.
+  async getProjectName(cfg: ConnectionConfig): Promise<string | null> {
+    try {
+      const r = await callProxy(cfg, "/_/PROJECT");
+      if (!r.ok) return null;
+      const line = r.body.split("\n").find((l) => l.startsWith("PROJECT"));
+      if (line) {
+        const cols = line.split("\t");
+        const n = (cols[1] ?? "").trim();
+        if (n) return n.replace(/\.rpp$/i, "");
+      }
+      const nameLine = r.body.split("\n").find((l) => l.startsWith("NAME"));
+      if (nameLine) {
+        const n = nameLine.split("\t")[1] ?? "";
+        if (n) return n.replace(/\.rpp$/i, "");
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  },
   setVolume(cfg: ConnectionConfig, idx: number, slider: number) {
     const amp = sliderToAmp(slider);
     return callProxy(cfg, `/_/SET/TRACK/${idx}/VOL/${amp.toFixed(4)}`);
