@@ -31,6 +31,7 @@ interface Ctx {
   disconnect: () => void;
   api: typeof reaperApi;
   lastError: string | null;
+  projectName: string | null;
 }
 
 const ReaperCtx = createContext<Ctx | null>(null);
