@@ -61,7 +61,8 @@ export function ReaperProvider({ children }: { children: ReactNode }) {
   const pollRef = useRef<number | null>(null);
   const trackRef = useRef<number | null>(null);
   const fxRef = useRef<number | null>(null);
-  const vuRef = useRef<number | null>(null);
+  // vuRef REMOVIDO — os picos peakL/peakR já vêm dentro do endpoint /_/TRACK.
+  // Ter um polling separado por track gerava N+1 requests por ciclo (lento demais).
   const reconnectRef = useRef<number | null>(null);
 
   const setConfig = useCallback((c: ConnectionConfig) => {
@@ -70,14 +71,15 @@ export function ReaperProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const stopPolling = useCallback(() => {
-    if (pollRef.current) { window.clearInterval(pollRef.current); pollRef.current = null; }
+    if (pollRef.current)  { window.clearInterval(pollRef.current);  pollRef.current  = null; }
     if (trackRef.current) { window.clearInterval(trackRef.current); trackRef.current = null; }
-    if (fxRef.current) { window.clearInterval(fxRef.current); fxRef.current = null; }
-    if (vuRef.current) { window.clearInterval(vuRef.current); vuRef.current = null; }
+    if (fxRef.current)    { window.clearInterval(fxRef.current);    fxRef.current    = null; }
   }, []);
 
   const startPolling = useCallback(() => {
     stopPolling();
+
+    // Transport polling — verifica conexão e posição de playback.
     pollRef.current = window.setInterval(async () => {
       try {
         const t = await reaperApi.getTransport(config);
@@ -96,21 +98,23 @@ export function ReaperProvider({ children }: { children: ReactNode }) {
       }
     }, 500);
 
-    // Track polling — fast for VU meters
+    // Track + VU polling — 100ms, UM único request por ciclo.
+    // O endpoint /_/TRACK já devolve peakL e peakR de cada track,
+    // então não precisamos de nenhum request extra para o VU meter.
     trackRef.current = window.setInterval(async () => {
       try {
         const list = await reaperApi.getTracks(config);
         if (list.length) {
           setTracks((prev) => {
-            // Preserve fx list across refresh
+            // Preserva a lista de FX entre os refreshes (FX vem de polling mais lento).
             const fxMap = new Map(prev.map((t) => [t.index, t.fx]));
             return list.map((t) => ({ ...t, fx: fxMap.get(t.index) ?? [] }));
           });
         }
-      } catch { /* handled by transport poll */ }
-    }, 250);
+      } catch { /* erros de conexão são tratados pelo transport poll */ }
+    }, 100);
 
-    // FX polling — slower
+    // FX polling — mais lento, só busca nomes de plugins.
     fxRef.current = window.setInterval(async () => {
       try {
         const current = await reaperApi.getTracks(config);
@@ -128,33 +132,6 @@ export function ReaperProvider({ children }: { children: ReactNode }) {
       } catch { /* noop */ }
     }, 4000);
 
-    // VU polling otimizado — usa Promise.all sobre os índices já presentes no estado
-    vuRef.current = window.setInterval(async () => {
-      try {
-        setTracks((prev) => {
-          const indices = prev.map((t) => t.index);
-          if (!indices.length) return prev;
-          // Poll em paralelo para todos os índices
-          Promise.all(indices.map(async (idx) => ({ idx, vu: await reaperApi.getTrackVu(config, idx) })))
-            .then((vus) => {
-              // Log para depuração dos valores de VU recebidos
-              if (vus.length) {
-                console.log("VU values:", vus.map(v => ({ idx: v.idx, L: v.vu?.peakL, R: v.vu?.peakR })));
-              }
-              // Só atualiza se houver mudança real
-              setTracks((oldTracks) =>
-                oldTracks.map((t) => {
-                  const found = vus.find((v) => v.idx === t.index);
-                  if (!found || !found.vu) return t;
-                  if (t.peakL === found.vu.peakL && t.peakR === found.vu.peakR) return t;
-                  return { ...t, peakL: found.vu.peakL, peakR: found.vu.peakR };
-                })
-              );
-            });
-          return prev;
-        });
-      } catch { /* noop */ }
-    }, 100);
   }, [config, stopPolling]);
 
   const scheduleReconnect = useCallback(() => {
@@ -173,7 +150,7 @@ export function ReaperProvider({ children }: { children: ReactNode }) {
     if (r.ok) {
       setStatus("connected");
       logEvent("ok", "Conectado ao REAPER");
-      // initial track fetch
+      // Busca inicial das tracks antes de ligar o polling.
       try {
         const t = await reaperApi.getTracks(config);
         setTracks(t);
@@ -230,5 +207,3 @@ export function useReaper() {
   if (!ctx) throw new Error("useReaper must be used within ReaperProvider");
   return ctx;
 }
-
-

@@ -1,3 +1,29 @@
+import os from "os";
+import { networkInterfaces } from "os";
+// Endpoint para status do sistema (CPU, RAM, rede)
+app.get("/sysinfo", (_req, res) => {
+  // CPU usage (média dos últimos 1, 5, 15 min)
+  const loads = os.loadavg();
+  // RAM
+  const totalMem = os.totalmem();
+  const freeMem = os.freemem();
+  const usedMem = totalMem - freeMem;
+  // Rede (soma dos bytes transmitidos/recebidos em todas as interfaces)
+  const nets = networkInterfaces();
+  let rx = 0, tx = 0;
+  for (const name of Object.keys(nets)) {
+    for (const ni of nets[name] || []) {
+      if (ni.internal) continue;
+      rx += ni.rx_bytes || 0;
+      tx += ni.tx_bytes || 0;
+    }
+  }
+  res.json({
+    cpu: { load1: loads[0], load5: loads[1], load15: loads[2] },
+    ram: { total: totalMem, used: usedMem, free: freeMem },
+    net: { rx, tx }
+  });
+});
 // Local Express proxy for the REAPER Web Interface.
 // Run from the project root with:  npm run server
 //

@@ -1,7 +1,7 @@
 import { Track } from "@/lib/reaperApi";
 import { useReaper } from "@/hooks/useReaper";
 import { ampToSlider, formatDb, sliderToAmp } from "@/lib/reaperApi";
-import { debounce } from "@/lib/debounce";
+// import { debounce } from "@/lib/debounce";
 import { cn } from "@/lib/utils";
 import { useEffect, useRef, useState } from "react";
 import { ChevronDown, Circle } from "lucide-react";
@@ -21,7 +21,6 @@ export function TrackStrip({ track, compact = true, groupColor }: Props) {
   const [optMute, setOptMute] = useState<boolean | null>(null);
   const [optSolo, setOptSolo] = useState<boolean | null>(null);
   const [optRec, setOptRec] = useState<boolean | null>(null);
-  const isPlaying = transport?.playstate === 1;
   const selected = selectedTrack === track.index;
 
   const muted = optMute ?? track.mute;
@@ -35,10 +34,10 @@ export function TrackStrip({ track, compact = true, groupColor }: Props) {
   useEffect(() => { if (optSolo !== null && optSolo === track.solo) setOptSolo(null); }, [track.solo, optSolo]);
   useEffect(() => { if (optRec !== null && optRec === track.recarm) setOptRec(null); }, [track.recarm, optRec]);
 
-  // Debounce para suavizar o envio de comandos de volume
-  const commitVol = useRef(debounce((v: number) => {
+  // Envio imediato, sem debounce
+  const commitVol = (v: number) => {
     api.setVolume(config, track.index, v).catch(() => undefined);
-  }, 5)).current;
+  };
   const commitPan = (v: number) => api.setPan(config, track.index, v).catch(() => undefined);
 
   const label = track.isMaster ? "MASTER" : (track.name || `${track.index}`);
@@ -56,20 +55,38 @@ export function TrackStrip({ track, compact = true, groupColor }: Props) {
 
   return (
     <div
-      onClick={() => setSelectedTrack(track.index)}
       style={sideStyle}
       className={cn(
-        "flex flex-col items-stretch shrink-0 select-none",
+        "flex flex-col items-stretch shrink-0 select-none transition-all duration-200",
         width,
-        "bg-surface border-l border-r border-border cursor-pointer",
-        selected && "bg-surface-2",
+        "bg-surface border-l border-r border-border",
+        selected
+          ? "ring-4 ring-primary/90 bg-primary/10 scale-105 z-10"
+          : "hover:ring-2 hover:ring-primary/40 hover:bg-neutral-800/80 opacity-80 hover:opacity-100"
       )}
     >
       {/* Header: track name (tinted by group color) */}
       <div
-        className="flex items-center gap-0.5 px-1 py-0.5 border-b border-border h-5 bg-surface-3"
+        className={cn(
+          "flex items-center gap-0.5 px-1 py-0.5 border-b border-border h-5 bg-surface-3 cursor-pointer relative",
+          track.isFolder && groupColor && "shadow-[0_0_0_2px_hsl(var(--primary)/0.25)]"
+        )}
         style={headerStyle}
+        onClick={() => setSelectedTrack(track.index)}
       >
+        {groupColor && (
+          track.isFolder ? (
+            <span
+              className="absolute left-0 top-0 h-full w-3 rounded-l bg-primary/80 border-r-2 border-primary"
+              style={{ background: `hsl(${groupColor} / 0.98)`, borderColor: `hsl(${groupColor} / 0.85)` }}
+            />
+          ) : (
+            <span
+              className="absolute left-0 top-0 h-full w-1.5 rounded-l"
+              style={{ background: `hsl(${groupColor} / 0.95)` }}
+            />
+          )
+        )}
         <span
           className={cn(
             "text-[10px] truncate flex-1 font-medium",
@@ -117,20 +134,14 @@ export function TrackStrip({ track, compact = true, groupColor }: Props) {
 
       {/* Fader area: real VU + fader */}
       <div className="flex gap-0.5 px-1 py-1.5 h-[160px] justify-center">
-        <div className="flex flex-col items-center gap-0.5 w-2.5">
-          <div className="flex gap-px">
-            <VuMeter active={isPlaying && !muted} peak={track.peakL} />
-            <VuMeter active={isPlaying && !muted} peak={track.peakR} />
-          </div>
-          <div className="flex flex-col items-center mt-0.5">
-            <span className="text-[7px] text-muted-foreground/60">L: {typeof track.peakL === 'number' ? track.peakL.toFixed(2) : 'N/A'}</span>
-            <span className="text-[7px] text-muted-foreground/60">R: {typeof track.peakR === 'number' ? track.peakR.toFixed(2) : 'N/A'}</span>
-          </div>
-          {isPlaying && !muted && (track.peakL === 0 || track.peakR === 0) && (
-            <div className="text-[8px] text-muted-foreground/60 leading-tight mt-0.5 text-center">
-              sem sinal
-            </div>
-          )}
+        <div className="flex gap-px w-2.5">
+          {/*
+            active é sempre true para que o decay suave via requestAnimationFrame
+            funcione mesmo quando parado. O pico vai naturalmente para 0 via release
+            quando não há sinal. Passamos muted para zerar o target quando mutado.
+          */}
+          <VuMeter peak={track.peakL} muted={muted} />
+          <VuMeter peak={track.peakR} muted={muted} />
         </div>
         <FaderTrack
           value={localVol}
@@ -272,17 +283,13 @@ function FaderTrack({
     const r = el.getBoundingClientRect();
     const rel = 1 - Math.max(0, Math.min(1, (clientY - r.top) / r.height));
     onChange(rel);
+    onCommit(rel); // Envia volume em tempo real durante o arraste (sem debounce)
   };
 
   useEffect(() => {
-    function move(e: PointerEvent) {
-      if (dragging.current) {
-        setFromY(e.clientY);
-        // Envia o volume em tempo real durante o arraste
-        onCommit(value);
-      }
-    }
+    function move(e: PointerEvent) { if (dragging.current) setFromY(e.clientY); }
     function up() {
+      if (dragging.current) onCommit(value);
       dragging.current = false;
     }
     window.addEventListener("pointermove", move);
@@ -293,86 +300,111 @@ function FaderTrack({
     };
   }, [value, onCommit]);
 
-  const ticks = [
-    { db: "0", pos: 0.5 },
-    { db: "6", pos: 0.36 },
-    { db: "12", pos: 0.27 },
-    { db: "18", pos: 0.21 },
-    { db: "24", pos: 0.15 },
+  // Escala dB para o fader (igual ao REAPER)
+  // Escala de -∞ a +12 dB, distribuída para caber visualmente
+  const dbMarks = [
+    { db: '+12', val: 1.0 },
+    { db: '+6', val: 0.85 },
+    { db: '0', val: 0.7 },
+    { db: '-6', val: 0.55 },
+    { db: '-12', val: 0.4 },
+    { db: '-24', val: 0.25 },
+    { db: '-∞', val: 0.0 },
   ];
 
   return (
-    <div
-      ref={trackRef}
-      onPointerDown={(e) => {
-        e.stopPropagation();
-        dragging.current = true;
-        setFromY(e.clientY);
-      }}
-      onDoubleClick={(e) => { e.stopPropagation(); onChange(ampToSlider(1)); onCommit(ampToSlider(1)); }}
-      className="relative w-4 h-full cursor-ns-resize"
-    >
-      <div className="absolute left-1/2 top-0 bottom-0 -translate-x-1/2 w-1 bg-black border border-border rounded-sm" />
-      {ticks.map((t) => (
-        <div key={t.db} className="absolute right-0 flex items-center gap-0.5" style={{ bottom: `calc(${t.pos * 100}% - 1px)` }}>
-          <div className="h-px w-1 bg-muted-foreground/60" />
-        </div>
-      ))}
+    <div className="relative flex flex-row w-10 h-full cursor-ns-resize">
+      {/* Escala dB */}
+      <div className="flex flex-col items-end justify-between h-full pr-0.5 select-none text-[9px] text-muted-foreground font-mono w-5">
+        {dbMarks.map((m) => (
+          <div key={m.db} style={{ position: 'absolute', bottom: `calc(${m.val * 100}% - 7px)` }}>
+            {m.db}
+          </div>
+        ))}
+      </div>
+      {/* Fader */}
       <div
-        className="fader-cap absolute left-1/2 -translate-x-1/2 w-4 h-2.5 rounded-sm"
-        style={{ bottom: `calc(${value * 100}% - 5px)` }}
-      />
+        ref={trackRef}
+        onPointerDown={(e) => {
+          e.stopPropagation();
+          dragging.current = true;
+          setFromY(e.clientY);
+        }}
+        onDoubleClick={(e) => { e.stopPropagation(); onChange(ampToSlider(1)); onCommit(ampToSlider(1)); }}
+        className="relative w-4 h-full cursor-ns-resize"
+      >
+        <div className="absolute left-1/2 top-0 bottom-0 -translate-x-1/2 w-1 bg-black border border-border rounded-sm" />
+        {dbMarks.map((m) => (
+          <div key={m.db} className="absolute left-0 w-full" style={{ bottom: `calc(${m.val * 100}% - 1px)` }}>
+            <div className="h-px w-2 bg-muted-foreground/60" />
+          </div>
+        ))}
+        <div
+          className={[
+            "fader-cap absolute left-1/2 -translate-x-1/2",
+            "w-3 h-6",
+            "rounded-full border border-white/70",
+            "bg-gradient-to-b from-neutral-100 via-neutral-400 to-neutral-800",
+            "shadow-[0_2px_6px_0_rgba(0,0,0,0.30),inset_0_2px_6px_0_rgba(255,255,255,0.15)]",
+            "flex flex-col justify-center items-stretch gap-0.5 px-0.5",
+            dragging.current ? "ring-2 ring-primary/60" : "hover:ring-2 hover:ring-primary/30 transition"
+          ].join(" ")}
+          style={{ bottom: `calc(${value * 100}% - 12px)` }}
+        >
+          {/* Brilho no topo */}
+          <div className="absolute left-1/2 -translate-x-1/2 top-0.5 w-2 h-0.5 rounded-full bg-white/60 opacity-70 blur-[1px]" />
+          {/* Linhas horizontais */}
+          <div className="h-0.5 w-full bg-white/40 mb-0.5 rounded" />
+          <div className="h-0.5 w-full bg-white/20 mb-0.5 rounded" />
+        </div>
+      </div>
     </div>
   );
 }
 
-// Real VU meter — uses the actual peak amplitude from REAPER (track.peakL/R)
-// Falls back to a slow decay so jumps look natural between polls.
-function VuMeter({ active, peak }: { active: boolean; peak: number }) {
+// VU meter com decay suave via requestAnimationFrame.
+// - active é sempre true para o loop de RAF rodar continuamente.
+// - Quando muted=true o target vai para 0 e o decay natural zera a barra suavemente.
+// - attack rápido (0.6) para subir junto com o sinal.
+// - release lento (0.06) para o decay visual parecer natural como um VU analógico.
+function VuMeter({ peak, muted }: { peak: number; muted: boolean }) {
   const [v, setV] = useState(0);
   const target = useRef(0);
 
-  // Fallback: se peak for undefined/NaN, trata como zero
-  const safePeak = typeof peak === 'number' && !isNaN(peak) ? peak : 0;
-
   useEffect(() => {
-    if (!active) { target.current = 0; return; }
-    // amplitude 0..1+ → clamp
-    target.current = Math.min(1, Math.max(0, safePeak));
-  }, [safePeak, active]);
+    // Quando mutado zera o target — o decay cuida de baixar suavemente.
+    target.current = muted ? 0 : Math.min(1, Math.max(0, peak));
+  }, [peak, muted]);
 
   useEffect(() => {
     let raf = 0;
     const tick = () => {
       setV((cur) => {
-        const t = active ? target.current : 0;
-        // attack fast, release slow
-        const next = t > cur ? cur + (t - cur) * 0.6 : cur + (t - cur) * 0.08;
+        const t = target.current;
+        // Attack rápido para subir, release lento para cair (comportamento VU analógico).
+        const next = t > cur
+          ? cur + (t - cur) * 0.6   // attack
+          : cur + (t - cur) * 0.06; // release — mais lento = mais fluido
+        // Para de atualizar quando já estiver praticamente em zero para não ficar em loop infinito.
+        if (Math.abs(next) < 0.0005) return 0;
         return next;
       });
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [active]);
+  }, []);
 
-  // Visual flat: barra única preenchendo de baixo para cima, cor verde vibrante
+  // Color zones: green 0-70%, yellow 70-90%, red 90-100%
+  const greenH  = Math.min(v, 0.7) * 100;
+  const yellowH = Math.max(0, Math.min(v, 0.9) - 0.7) * 100;
+  const redH    = Math.max(0, v - 0.9) * 100;
+
   return (
-    <div className="relative w-2 h-32 bg-neutral-900 rounded-sm overflow-hidden flex flex-col-reverse border border-neutral-700">
-      <div
-        className="absolute left-0 bottom-0 w-full bg-[#00FF66] transition-all duration-75"
-        style={{ height: `${Math.round(v * 100)}%` }}
-      />
-      {/* Valor interno de v para depuração visual */}
-      <div className="absolute top-0 left-0 w-full text-center text-[7px] text-blue-700 bg-white/70 pointer-events-none select-none">
-        {v.toFixed(2)}
-      </div>
-      {/* Aviso visual dentro do VU se não houver sinal */}
-      {safePeak === 0 ? (
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <span className="text-[7px] text-muted-foreground/60 bg-background/80 px-0.5 rounded">sem sinal</span>
-        </div>
-      ) : null}
+    <div className="relative w-1.5 h-full well rounded-sm overflow-hidden flex flex-col-reverse">
+      <div className="bg-vu-green"  style={{ height: `${greenH}%` }} />
+      <div className="bg-vu-yellow" style={{ height: `${yellowH}%` }} />
+      <div className="bg-vu-red"    style={{ height: `${redH}%` }} />
     </div>
   );
 }

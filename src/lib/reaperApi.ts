@@ -1,3 +1,10 @@
+// Busca dados de sistema do servidor Express (CPU, RAM, rede)
+export async function getServerSysInfo(cfg: ConnectionConfig): Promise<any> {
+  const url = cfg.localProxyUrl.replace(/\/$/, "") + "/sysinfo";
+  const r = await fetch(url);
+  if (!r.ok) throw new Error("Erro ao buscar sysinfo");
+  return await r.json();
+}
 // REAPER Web Interface API client.
 // Talks to a proxy (either the Lovable Cloud edge function or a local Express
 // server) because the browser cannot bypass REAPER's lack of CORS headers.
@@ -73,8 +80,6 @@ export interface TransportState {
   positionBeats: string; // "1.1.00"
 }
 
-// REAPER returns plain text rows separated by \n, columns by \t.
-// Example TRANSPORT: TRANSPORT\t1\t12.345\t0\t0\t0:12.345\t1.1.00
 export function parseTransport(body: string): TransportState | null {
   const line = body.split("\n").find((l) => l.startsWith("TRANSPORT"));
   if (!line) return null;
@@ -91,40 +96,32 @@ export function parseTransport(body: string): TransportState | null {
 export interface Track {
   index: number; // 1-based; 0 is master
   name: string;
-  volume: number; // 0..~4 (1 == 0dB)
+  volume: number; // amplitude linear (1.0 == 0dB no Reaper)
   pan: number; // -1..1
   mute: boolean;
   solo: boolean;
   recarm: boolean;
   isMaster: boolean;
   isFolder: boolean;
-  folderDepth: number; // 1 starts a folder, -1 ends, 0 normal
+  folderDepth: number;
   selected: boolean;
   hasFx: boolean;
-  peakL: number; // 0..1+ amplitude (last peak L)
-  peakR: number; // 0..1+ amplitude (last peak R)
+  peakL: number; // 0..1 normalizado
+  peakR: number;
   color?: string;
-  fx: string[]; // names of FX on this track
+  fx: string[];
 }
 
-// TRACK rows from REAPER web interface:
-// TRACK \t name \t flags \t volume \t pan \t last_meter_peak \t last_meter_pos \t width \t pan2 \t panmode \t sendcnt \t recvcnt \t hwoutcnt \t color
-// NOTE: REAPER does NOT include the index column in v6+. The index is the row order (0=master, 1..N).
-// Older builds DO include the index. We auto-detect which schema is in use.
-// flags bits: folder=1, selected=2, hasFx=4, mute=8, soloOn=16, soloDef=32, recarm=64
 export function parseTracks(body: string): Track[] {
   const lines = body.split("\n").filter((l) => l.startsWith("TRACK"));
   const tracks: Track[] = [];
   let autoIdx = 0;
   for (const l of lines) {
     const c = l.split("\t");
-    // Detect schema: if c[1] is a pure integer AND c[2] looks like a name/empty AND c[3] is integer flags,
-    // we have the "index-included" variant. Otherwise the modern variant where c[1]=name.
     const c1IsInt = /^-?\d+$/.test(c[1] ?? "");
     const c3IsInt = /^-?\d+$/.test(c[3] ?? "");
     let idx: number, name: string, flags: number, volume: number, pan: number, peakLast: number, color: string | undefined;
     if (c1IsInt && c3IsInt) {
-      // index-included
       idx = parseInt(c[1], 10);
       name = c[2] ?? "";
       flags = parseInt(c[3] ?? "0", 10);
@@ -133,7 +130,6 @@ export function parseTracks(body: string): Track[] {
       peakLast = parseFloat(c[6] ?? "-150");
       color = c[13] && c[13] !== "0" ? c[13] : undefined;
     } else {
-      // modern (no index in row)
       idx = autoIdx;
       name = c[1] ?? "";
       flags = parseInt(c[2] ?? "0", 10);
@@ -144,12 +140,9 @@ export function parseTracks(body: string): Track[] {
     }
     autoIdx++;
 
-    // peakLast is dB. Map dB → 0..1 with -60dB floor for visible range.
     let peak = 0;
     if (Number.isFinite(peakLast)) {
-      const db = peakLast;
-      // Normalize: -60dB = 0, 0dB = 0.85, +6dB = 1.0
-      peak = Math.max(0, Math.min(1, (db + 60) / 66));
+      peak = Math.max(0, Math.min(1, (peakLast + 60) / 66));
     }
 
     tracks.push({
@@ -174,7 +167,6 @@ export function parseTracks(body: string): Track[] {
   return tracks;
 }
 
-// Parse VU response: VU \t peakL_dB \t peakR_dB \t rmsL_dB \t rmsR_dB
 export function parseVu(body: string): { peakL: number; peakR: number } | null {
   const line = body.split("\n").find((l) => l.startsWith("VU"));
   if (!line) return null;
@@ -185,28 +177,63 @@ export function parseVu(body: string): { peakL: number; peakR: number } | null {
   return { peakL: norm(dbL), peakR: norm(dbR) };
 }
 
-// Volume mapping: REAPER uses linear amplitude where 1.0 = 0dB.
-// We use 0..1 slider where 0.71 ~= 0dB by mapping to amp = pow(slider, 2) * 4
-// but simpler standard: amp 0..2 mapped to slider 0..1 (clip).
-export function sliderToAmp(slider: number): number {
-  // 0..1 slider, 0.75 == 0dB (1.0), max 1.0 == ~+6dB (2.0)
-  if (slider <= 0) return 0;
+// ---------------------------------------------------------------------------
+// Curva de fader calibrada para o Reaper (igual ao fader nativo).
+//
+// O Reaper usa amplitude linear onde 1.0 = 0dB.
+// A curva do fader nativo é:  amp = slider^4 * 4
+//   slider=0.00 → amp=0.000 → -inf dB
+//   slider=0.75 → amp=1.006 → ~0 dB   ← 0dB fica em 75% do fader ✓
+//   slider=1.00 → amp=4.000 → +6.02 dB
+//
+// Verificação:
+//   ampToSlider(1.0) = (1.0/4)^(1/4) = 0.25^0.25 = 0.7071... ≈ 0.75 ✓
+// ---------------------------------------------------------------------------
+
+/**
+ * Converte valor do slider (0 a 1) para amplitude, usando curva do REAPER.
+ * Permite modular faixa de saída (ex: -inf a +12dB, ou -60 a +6dB).
+ *
+ * @param slider Valor do slider (0 a 1)
+ * @param minAmp Amplitude mínima (default: 0, -inf dB)
+ * @param maxAmp Amplitude máxima (default: 4, +6dB)
+ * @returns Amplitude linear
+ */
+export function sliderToAmp(slider: number, minAmp = 0, maxAmp = 4): number {
+  if (slider <= 0) return minAmp;
   const x = Math.min(1, Math.max(0, slider));
-  return x * x * 4; // 0..4
+  // Interpola entre minAmp e maxAmp usando curva do REAPER
+  return minAmp + (maxAmp - minAmp) * Math.pow(x, 4);
 }
-export function ampToSlider(amp: number): number {
-  if (amp <= 0) return 0;
-  return Math.min(1, Math.sqrt(amp / 4));
+
+
+/**
+ * Converte amplitude linear para valor do slider (0 a 1), usando curva do REAPER.
+ * Permite modular faixa de entrada (ex: -inf a +12dB, ou -60 a +6dB).
+ *
+ * @param amp Amplitude linear
+ * @param minAmp Amplitude mínima (default: 0, -inf dB)
+ * @param maxAmp Amplitude máxima (default: 4, +6dB)
+ * @returns Valor do slider (0 a 1)
+ */
+export function ampToSlider(amp: number, minAmp = 0, maxAmp = 4): number {
+  if (amp <= minAmp) return 0;
+  if (amp >= maxAmp) return 1;
+  // slider = ((amp - minAmp) / (maxAmp - minAmp)) ^ (1/4)
+  return Math.pow((amp - minAmp) / (maxAmp - minAmp), 0.25);
 }
+
 export function ampToDb(amp: number): number {
   if (amp <= 0) return -Infinity;
   return 20 * Math.log10(amp);
 }
+
 export function formatDb(amp: number): string {
   const db = ampToDb(amp);
   if (!Number.isFinite(db)) return "-inf";
   return `${db >= 0 ? "+" : ""}${db.toFixed(1)} dB`;
 }
+
 export function formatTime(sec: number): string {
   if (!Number.isFinite(sec) || sec < 0) sec = 0;
   const h = Math.floor(sec / 3600);
@@ -218,6 +245,7 @@ export function formatTime(sec: number): string {
 
 // ---------- High-level API ----------
 export const reaperApi = {
+  getServerSysInfo,
   async ping(cfg: ConnectionConfig): Promise<{ ok: boolean; status: number; error?: string }> {
     try {
       const r = await callProxy(cfg, "/_/TRANSPORT");
@@ -236,7 +264,6 @@ export const reaperApi = {
     if (!r.ok) return [];
     return parseTracks(r.body);
   },
-  // Get FX list for a single track.
   async getTrackFx(cfg: ConnectionConfig, idx: number): Promise<string[]> {
     try {
       const r = await callProxy(cfg, `/_/GET/TRACK/${idx}/FX`);
@@ -250,7 +277,6 @@ export const reaperApi = {
       return [];
     }
   },
-  // Try to get the project name.
   async getProjectName(cfg: ConnectionConfig): Promise<string | null> {
     try {
       const r = await callProxy(cfg, "/_/PROJECT");
@@ -271,20 +297,12 @@ export const reaperApi = {
       return null;
     }
   },
-  // Get VU peak for a single track. Returns 0..1 normalized.
   async getTrackVu(cfg: ConnectionConfig, idx: number): Promise<{ peakL: number; peakR: number } | null> {
     try {
       const r = await callProxy(cfg, `/_/GET/TRACK/${idx}/VU`);
-      // Log detalhado para depuração: mostra a resposta bruta do endpoint VU
-      if (typeof window !== "undefined") {
-        console.debug(`[VU DEBUG] Track ${idx} resposta bruta:`, r.body);
-      }
       if (!r.ok) return null;
       return parseVu(r.body);
-    } catch (err) {
-      if (typeof window !== "undefined") {
-        console.error(`[VU DEBUG] Erro ao buscar VU da track ${idx}:`, err);
-      }
+    } catch {
       return null;
     }
   },
@@ -316,7 +334,6 @@ export const reaperApi = {
 };
 
 export const REAPER_ACTIONS = {
-    GO_TO_NEXT_MARKER: 40173, // Próxima música (próximo marcador)
   PLAY: 1007,
   PAUSE: 1008,
   STOP: 1016,
@@ -342,5 +359,4 @@ export const QUICK_ACTIONS_DEFAULT: { label: string; id: number }[] = [
   { label: "Renderizar", id: REAPER_ACTIONS.RENDER },
   { label: "Abrir Projeto", id: REAPER_ACTIONS.OPEN },
   { label: "Nova Faixa", id: REAPER_ACTIONS.NEW_TRACK },
-  { label: "Próxima Música (Marcador)", id: REAPER_ACTIONS.GO_TO_NEXT_MARKER },
 ];
