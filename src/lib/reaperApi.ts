@@ -275,9 +275,16 @@ export const reaperApi = {
   async getTrackVu(cfg: ConnectionConfig, idx: number): Promise<{ peakL: number; peakR: number } | null> {
     try {
       const r = await callProxy(cfg, `/_/GET/TRACK/${idx}/VU`);
+      // Log detalhado para depuração: mostra a resposta bruta do endpoint VU
+      if (typeof window !== "undefined") {
+        console.debug(`[VU DEBUG] Track ${idx} resposta bruta:`, r.body);
+      }
       if (!r.ok) return null;
       return parseVu(r.body);
-    } catch {
+    } catch (err) {
+      if (typeof window !== "undefined") {
+        console.error(`[VU DEBUG] Erro ao buscar VU da track ${idx}:`, err);
+      }
       return null;
     }
   },
@@ -309,6 +316,7 @@ export const reaperApi = {
 };
 
 export const REAPER_ACTIONS = {
+    GO_TO_NEXT_MARKER: 40173, // Próxima música (próximo marcador)
   PLAY: 1007,
   PAUSE: 1008,
   STOP: 1016,
@@ -334,4 +342,5 @@ export const QUICK_ACTIONS_DEFAULT: { label: string; id: number }[] = [
   { label: "Renderizar", id: REAPER_ACTIONS.RENDER },
   { label: "Abrir Projeto", id: REAPER_ACTIONS.OPEN },
   { label: "Nova Faixa", id: REAPER_ACTIONS.NEW_TRACK },
+  { label: "Próxima Música (Marcador)", id: REAPER_ACTIONS.GO_TO_NEXT_MARKER },
 ];

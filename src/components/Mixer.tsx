@@ -100,11 +100,7 @@ export function Mixer() {
           </div>
         ))}
 
-        {master && (
-          <div className="flex items-stretch ml-auto border-l-2 border-primary/40">
-            <TrackStrip track={master} />
-          </div>
-        )}
+        {/* O fader do master foi movido para o painel de ações rápidas */}
       </div>
     </div>
   );

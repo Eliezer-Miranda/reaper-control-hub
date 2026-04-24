@@ -128,24 +128,33 @@ export function ReaperProvider({ children }: { children: ReactNode }) {
       } catch { /* noop */ }
     }, 4000);
 
-    // VU polling — fast and dedicated, queries each track's real meter.
+    // VU polling otimizado — usa Promise.all sobre os índices já presentes no estado
     vuRef.current = window.setInterval(async () => {
       try {
-        // Snapshot current track indices to query
-        const indices = (await reaperApi.getTracks(config)).map((t) => t.index);
-        if (!indices.length) return;
-        const vus = await Promise.all(
-          indices.map(async (idx) => ({ idx, vu: await reaperApi.getTrackVu(config, idx) })),
-        );
-        setTracks((prev) =>
-          prev.map((t) => {
-            const found = vus.find((v) => v.idx === t.index);
-            if (!found || !found.vu) return t;
-            return { ...t, peakL: found.vu.peakL, peakR: found.vu.peakR };
-          }),
-        );
+        setTracks((prev) => {
+          const indices = prev.map((t) => t.index);
+          if (!indices.length) return prev;
+          // Poll em paralelo para todos os índices
+          Promise.all(indices.map(async (idx) => ({ idx, vu: await reaperApi.getTrackVu(config, idx) })))
+            .then((vus) => {
+              // Log para depuração dos valores de VU recebidos
+              if (vus.length) {
+                console.log("VU values:", vus.map(v => ({ idx: v.idx, L: v.vu?.peakL, R: v.vu?.peakR })));
+              }
+              // Só atualiza se houver mudança real
+              setTracks((oldTracks) =>
+                oldTracks.map((t) => {
+                  const found = vus.find((v) => v.idx === t.index);
+                  if (!found || !found.vu) return t;
+                  if (t.peakL === found.vu.peakL && t.peakR === found.vu.peakR) return t;
+                  return { ...t, peakL: found.vu.peakL, peakR: found.vu.peakR };
+                })
+              );
+            });
+          return prev;
+        });
       } catch { /* noop */ }
-    }, 150);
+    }, 100);
   }, [config, stopPolling]);
 
   const scheduleReconnect = useCallback(() => {
@@ -221,3 +230,5 @@ export function useReaper() {
   if (!ctx) throw new Error("useReaper must be used within ReaperProvider");
   return ctx;
 }
+
+

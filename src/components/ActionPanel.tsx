@@ -1,7 +1,8 @@
 import { useReaper } from "@/hooks/useReaper";
-import { QUICK_ACTIONS_DEFAULT } from "@/lib/reaperApi";
+import { QUICK_ACTIONS_DEFAULT, ampToSlider, sliderToAmp, formatDb } from "@/lib/reaperApi";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Slider } from "@/components/ui/slider";
 import { useEffect, useState } from "react";
 import { Plus, Trash2, Zap } from "lucide-react";
 import { logEvent } from "@/lib/eventLog";
@@ -10,7 +11,19 @@ interface CustomAction { id: number; label: string }
 const STORAGE = "reaper.customActions.v1";
 
 export function ActionPanel() {
-  const { api, config, status } = useReaper();
+  const { api, config, status, tracks } = useReaper();
+    // Master volume state
+    const masterTrack = tracks.find((t) => t.isMaster);
+    const [masterVol, setMasterVol] = useState(masterTrack ? ampToSlider(masterTrack.volume) : 0.75);
+    // Atualiza slider se volume do master mudar
+    useEffect(() => {
+      if (masterTrack) setMasterVol(ampToSlider(masterTrack.volume));
+    }, [masterTrack?.volume]);
+
+    const commitMasterVol = (v: number) => {
+      setMasterVol(v);
+      if (masterTrack) api.setVolume(config, masterTrack.index, v).catch(() => undefined);
+    };
   const [custom, setCustom] = useState<CustomAction[]>([]);
   const [newLabel, setNewLabel] = useState("");
   const [newId, setNewId] = useState("");
@@ -45,6 +58,26 @@ export function ActionPanel() {
         <Zap className="h-4 w-4" />
         <h3 className="text-sm font-semibold uppercase tracking-wider">Ações rápidas</h3>
       </div>
+
+      {/* Controle de volume master */}
+      {masterTrack && (
+        <div className="mb-2 p-2 rounded bg-surface-2 border border-border flex flex-col gap-1">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold">Volume Master</span>
+            <span className="font-mono text-[10px] text-muted-foreground">{formatDb(sliderToAmp(masterVol))}</span>
+          </div>
+          <Slider
+            min={0}
+            max={1}
+            step={0.01}
+            value={[masterVol]}
+            onValueChange={([v]) => setMasterVol(v)}
+            onValueCommit={([v]) => commitMasterVol(v)}
+            className="w-full"
+            aria-label="Volume Master"
+          />
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-2">
         {QUICK_ACTIONS_DEFAULT.map((a) => (

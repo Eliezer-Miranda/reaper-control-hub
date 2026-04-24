@@ -1,6 +1,7 @@
 import { Track } from "@/lib/reaperApi";
 import { useReaper } from "@/hooks/useReaper";
 import { ampToSlider, formatDb, sliderToAmp } from "@/lib/reaperApi";
+import { debounce } from "@/lib/debounce";
 import { cn } from "@/lib/utils";
 import { useEffect, useRef, useState } from "react";
 import { ChevronDown, Circle } from "lucide-react";
@@ -34,7 +35,10 @@ export function TrackStrip({ track, compact = true, groupColor }: Props) {
   useEffect(() => { if (optSolo !== null && optSolo === track.solo) setOptSolo(null); }, [track.solo, optSolo]);
   useEffect(() => { if (optRec !== null && optRec === track.recarm) setOptRec(null); }, [track.recarm, optRec]);
 
-  const commitVol = (v: number) => api.setVolume(config, track.index, v).catch(() => undefined);
+  // Debounce para suavizar o envio de comandos de volume
+  const commitVol = useRef(debounce((v: number) => {
+    api.setVolume(config, track.index, v).catch(() => undefined);
+  }, 5)).current;
   const commitPan = (v: number) => api.setPan(config, track.index, v).catch(() => undefined);
 
   const label = track.isMaster ? "MASTER" : (track.name || `${track.index}`);
@@ -113,9 +117,20 @@ export function TrackStrip({ track, compact = true, groupColor }: Props) {
 
       {/* Fader area: real VU + fader */}
       <div className="flex gap-0.5 px-1 py-1.5 h-[160px] justify-center">
-        <div className="flex gap-px w-2.5">
-          <VuMeter active={isPlaying && !muted} peak={track.peakL} />
-          <VuMeter active={isPlaying && !muted} peak={track.peakR} />
+        <div className="flex flex-col items-center gap-0.5 w-2.5">
+          <div className="flex gap-px">
+            <VuMeter active={isPlaying && !muted} peak={track.peakL} />
+            <VuMeter active={isPlaying && !muted} peak={track.peakR} />
+          </div>
+          <div className="flex flex-col items-center mt-0.5">
+            <span className="text-[7px] text-muted-foreground/60">L: {typeof track.peakL === 'number' ? track.peakL.toFixed(2) : 'N/A'}</span>
+            <span className="text-[7px] text-muted-foreground/60">R: {typeof track.peakR === 'number' ? track.peakR.toFixed(2) : 'N/A'}</span>
+          </div>
+          {isPlaying && !muted && (track.peakL === 0 || track.peakR === 0) && (
+            <div className="text-[8px] text-muted-foreground/60 leading-tight mt-0.5 text-center">
+              sem sinal
+            </div>
+          )}
         </div>
         <FaderTrack
           value={localVol}
@@ -260,9 +275,14 @@ function FaderTrack({
   };
 
   useEffect(() => {
-    function move(e: PointerEvent) { if (dragging.current) setFromY(e.clientY); }
+    function move(e: PointerEvent) {
+      if (dragging.current) {
+        setFromY(e.clientY);
+        // Envia o volume em tempo real durante o arraste
+        onCommit(value);
+      }
+    }
     function up() {
-      if (dragging.current) onCommit(value);
       dragging.current = false;
     }
     window.addEventListener("pointermove", move);
@@ -312,11 +332,14 @@ function VuMeter({ active, peak }: { active: boolean; peak: number }) {
   const [v, setV] = useState(0);
   const target = useRef(0);
 
+  // Fallback: se peak for undefined/NaN, trata como zero
+  const safePeak = typeof peak === 'number' && !isNaN(peak) ? peak : 0;
+
   useEffect(() => {
     if (!active) { target.current = 0; return; }
     // amplitude 0..1+ → clamp
-    target.current = Math.min(1, Math.max(0, peak));
-  }, [peak, active]);
+    target.current = Math.min(1, Math.max(0, safePeak));
+  }, [safePeak, active]);
 
   useEffect(() => {
     let raf = 0;
@@ -333,16 +356,23 @@ function VuMeter({ active, peak }: { active: boolean; peak: number }) {
     return () => cancelAnimationFrame(raf);
   }, [active]);
 
-  // Color zones: green 0-70%, yellow 70-90%, red 90-100%
-  const greenH = Math.min(v, 0.7) * 100;
-  const yellowH = Math.max(0, Math.min(v, 0.9) - 0.7) * 100;
-  const redH = Math.max(0, v - 0.9) * 100;
-
+  // Visual flat: barra única preenchendo de baixo para cima, cor verde vibrante
   return (
-    <div className="relative w-1.5 h-full well rounded-sm overflow-hidden flex flex-col-reverse">
-      <div className="bg-vu-green" style={{ height: `${greenH}%` }} />
-      <div className="bg-vu-yellow" style={{ height: `${yellowH}%` }} />
-      <div className="bg-vu-red" style={{ height: `${redH}%` }} />
+    <div className="relative w-2 h-32 bg-neutral-900 rounded-sm overflow-hidden flex flex-col-reverse border border-neutral-700">
+      <div
+        className="absolute left-0 bottom-0 w-full bg-[#00FF66] transition-all duration-75"
+        style={{ height: `${Math.round(v * 100)}%` }}
+      />
+      {/* Valor interno de v para depuração visual */}
+      <div className="absolute top-0 left-0 w-full text-center text-[7px] text-blue-700 bg-white/70 pointer-events-none select-none">
+        {v.toFixed(2)}
+      </div>
+      {/* Aviso visual dentro do VU se não houver sinal */}
+      {safePeak === 0 ? (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <span className="text-[7px] text-muted-foreground/60 bg-background/80 px-0.5 rounded">sem sinal</span>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -64,6 +64,10 @@ export function Transport() {
         >
           <Play className="h-4 w-4 fill-current" />
         </TBtn>
+        {/* Botão Próxima Música (Marcador) */}
+        <TBtn onClick={() => send(REAPER_ACTIONS.GO_TO_NEXT_MARKER, "Próxima Música (Marcador)")} title="Próxima Música (Marcador)">
+          <SkipForward className="h-3.5 w-3.5" />
+        </TBtn>
         <TBtn onClick={toggleLoop} title="Loop" color={loop ? "play" : "default"}>
           <Repeat className="h-3.5 w-3.5" />
         </TBtn>
