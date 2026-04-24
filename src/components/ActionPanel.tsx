@@ -59,23 +59,26 @@ export function ActionPanel() {
         <h3 className="text-sm font-semibold uppercase tracking-wider">Ações rápidas</h3>
       </div>
 
-      {/* Controle de volume master */}
+      {/* Controle de volume master — fader vertical */}
       {masterTrack && (
-        <div className="mb-2 p-2 rounded bg-surface-2 border border-border flex flex-col gap-1">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold">Volume Master</span>
-            <span className="font-mono text-[10px] text-muted-foreground">{formatDb(sliderToAmp(masterVol))}</span>
+        <div className="mb-2 p-2 rounded bg-surface-2 border border-border flex items-stretch gap-3">
+          <div className="flex flex-col items-center justify-between py-1">
+            <span className="text-[10px] font-semibold uppercase tracking-wider">Master</span>
+            <span className="font-mono text-[10px] text-muted-foreground mt-1">
+              {formatDb(sliderToAmp(masterVol))}
+            </span>
           </div>
-          <Slider
-            min={0}
-            max={1}
-            step={0.01}
-            value={[masterVol]}
-            onValueChange={([v]) => setMasterVol(v)}
-            onValueCommit={([v]) => commitMasterVol(v)}
-            className="w-full"
-            aria-label="Volume Master"
-          />
+          <div className="flex-1 flex justify-center h-40">
+            <Slider
+              orientation="vertical"
+              min={0}
+              max={1}
+              step={0.005}
+              value={[masterVol]}
+              onValueChange={([v]) => commitMasterVol(v)}
+              aria-label="Volume Master"
+            />
+          </div>
         </div>
       )}
 
